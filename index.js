@@ -1,4 +1,5 @@
 require('dotenv').config();
+const net = require('net');
 const db = require('./db');
 const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 const winston = require('winston');
@@ -18,6 +19,19 @@ const logger = winston.createLogger({
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
 });
+
+const HEALTH_CHECK_PORT = process.env.HEALTH_CHECK_PORT || 8080; // Define the port for health check
+
+// Create a TCP server for health check
+const healthCheckServer = net.createServer((socket) => {
+  socket.write('HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK');
+  socket.pipe(socket);
+});
+
+healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
+  console.log(`Health check server is listening on port ${HEALTH_CHECK_PORT}`);
+});
+
 
 const recurringCleanupsMap = new Map(); // Fallback in-memory storage
 
