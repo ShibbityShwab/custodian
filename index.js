@@ -24,12 +24,21 @@ const HEALTH_CHECK_PORT = process.env.HEALTH_CHECK_PORT || 8080; // Define the p
 
 // Create a TCP server for health check
 const healthCheckServer = net.createServer((socket) => {
-  socket.write('HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK');
-  socket.end();
+  socket.write('HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK', 'utf-8', () => {
+    socket.end();
+  });
+  
+  socket.on('error', (error) => {
+    console.error('Error occurred in socket:', error);
+  });
 });
 
 healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
   console.log(`Health check server is listening on port ${HEALTH_CHECK_PORT}`);
+});
+
+healthCheckServer.on('error', (error) => {
+  console.error('Health check server error:', error);
 });
 
 const recurringCleanupsMap = new Map(); // Fallback in-memory storage
