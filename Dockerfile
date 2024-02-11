@@ -1,5 +1,5 @@
 # Use Node.js as the base image
-FROM node:14
+FROM node:16
 
 # Install PostgreSQL client (optional)
 RUN apt-get update && apt-get install -y postgresql-client
