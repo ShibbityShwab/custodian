@@ -273,6 +273,28 @@ client.on('interactionCreate', async (interaction) => {
       content: `Recurring cleanup set for every ${intervalMinutes} minutes in ${channel.name}.`,
       ephemeral: true,
     });
+  } else if (commandName === 'setreminder') {
+    const time = options.getString('time');
+    const message = options.getString('message');
+
+    // Parse the time to calculate when the reminder should be sent
+    const parsedTime = parseTime(time);
+
+    if (!parsedTime) {
+      await interaction.reply({
+        content: 'Invalid time format. Please use "10m", "1h30m", etc.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // Set a timeout to send the reminder
+    setTimeout(async () => {
+      await interaction.followUp({
+        content: `⏰ Reminder: ${message}`,
+        ephemeral: true,
+      });
+    }, parsedTime);
   }
 });
 

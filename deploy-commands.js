@@ -4,6 +4,24 @@ const { Routes } = require('discord-api-types/v9');
 
 const commands = [
   {
+    name: 'setreminder',
+    description: 'Set a reminder for a specific time',
+    options: [
+      {
+        name: 'time',
+        type: 3,
+        description: 'Time for the reminder (e.g., "10m", "1h30m")',
+        required: true,
+      },
+      {
+        name: 'message',
+        type: 3,
+        description: 'Reminder message',
+        required: true,
+      },
+    ],
+  },
+  {
     name: 'cleanup',
     description: 'Immediately starts cleaning up messages older than the specified period in a channel',
     options: [
