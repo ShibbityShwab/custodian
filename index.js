@@ -24,8 +24,8 @@ const HEALTH_CHECK_PORT = process.env.HEALTH_CHECK_PORT || 8080; // Define the p
 
 // Create a TCP server for health check
 const healthCheckServer = net.createServer((socket) => {
-  socket.write('HEALTHCHECK OK'); // Send a success message
-  socket.end(); // Close the connection
+  socket.write('HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK');
+  socket.end();
 });
 
 healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
