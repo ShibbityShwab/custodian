@@ -20,6 +20,10 @@ import {
 } from './src/commands/db-manage.js';
 import { initDatabase, getPendingReminders } from './src/utils/db.js';
 import http from 'http';
+import { syncCommands } from './src/commands/sync.js';
+
+// Self-healing: sync slash commands before logging in
+await syncCommands();
 
 const client = new Client({
   intents: [
