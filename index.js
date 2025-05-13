@@ -1,301 +1,128 @@
-require('dotenv').config();
-const net = require('net');
-const db = require('./db');
-const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
-const winston = require('winston');
-const { format } = require('winston');
-const { colorize, combine, timestamp, printf } = format;
-
-const logger = winston.createLogger({
-  level: 'info',
-  format: combine(
-    timestamp(),
-    colorize(),
-    printf((info) => `${info.timestamp} [${info.level}]: [Guild ID: ${info.guildId}] ${info.message}`)
-  ),
-  transports: [new winston.transports.Console({ level: 'info' })]
-});
+import 'dotenv/config';
+import { Client, GatewayIntentBits, Events } from 'discord.js';
+import logger from './src/utils/logger.js';
+import { handleCleanupCommand } from './src/commands/cleanup.js';
+import { 
+  setRecurringCleanup, 
+  viewCleanupSchedule, 
+  cancelRecurringCleanup, 
+  editRecurringCleanup,
+  cleanupAllRecurringTasks 
+} from './src/commands/recurring-cleanup.js';
+import { handleReminderCommand } from './src/commands/reminder.js';
+import { handleHelpCommand } from './src/commands/help.js';
+import http from 'http';
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
-const HEALTH_CHECK_PORT = process.env.HEALTH_CHECK_PORT || 8080; // Define the port for health check
+const HEALTH_CHECK_PORT = process.env.HEALTH_CHECK_PORT || 8080;
 
-// Create a TCP server for health check
-const healthCheckServer = net.createServer((socket) => {
-  socket.write('HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK', 'utf-8', () => {
-    socket.end();
-  });
-  
-  socket.on('error', (error) => {
-    console.error('Error occurred in socket:', error);
-  });
-});
-
-healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
-  console.log(`Health check server is listening on port ${HEALTH_CHECK_PORT}`);
-});
-
-healthCheckServer.on('error', (error) => {
-  console.error('Health check server error:', error);
-});
-
-const recurringCleanupsMap = new Map(); // Fallback in-memory storage
-
-async function isDbConnected() {
-  try {
-    await db.query('SELECT 1'); // Simple query to check database connection
-    return true;
-  } catch (error) {
-    logger.error('Database connection failed:', error);
-    return false;
-  }
-}
-
-async function isCleanupTaskRunning(channelId) {
-  if (await isDbConnected()) {
-    // Check if cleanup task is running in the database
-    const queryText = `
-      SELECT channel_id FROM recurring_cleanups WHERE channel_id = $1 AND is_running = true
-    `;
-    const { rows } = await db.query(queryText, [channelId]);
-    return rows.length > 0; // Return true if there are rows (i.e., task is running)
+// Simple HTTP health check
+const server = http.createServer((req, res) => {
+  if (req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
   } else {
-    // Fallback to in-memory storage
-    return recurringCleanupsMap.has(channelId) && recurringCleanupsMap.get(channelId).isRunning;
+    res.writeHead(404);
+    res.end();
   }
-}
-
-function calculateThreshold(periodInput) {
-  const periodRegex = /^(\d+)(s|m|h)$/;
-  const match = periodInput.match(periodRegex);
-
-  if (!match) return null;
-
-  const [, amount, unit] = match;
-  const amountNumber = parseInt(amount, 10);
-  let multiplier;
-
-  switch (unit) {
-    case 's':
-      multiplier = 1000;
-      break;
-    case 'm':
-      multiplier = 1000 * 60;
-      break;
-    case 'h':
-      multiplier = 1000 * 60 * 60;
-      break;
-    default:
-      return null;
-  }
-
-  return Date.now() - amountNumber * multiplier;
-}
-
-async function isCleanupTaskRunningInDB(channelId) {
-  if (await isDbConnected()) {
-    // Check if cleanup task is running in the database
-    const queryText = `
-      SELECT channel_id FROM recurring_cleanups WHERE channel_id = $1 AND is_running = true
-    `;
-    const { rows } = await db.query(queryText, [channelId]);
-    return rows.length > 0;
-  } else {
-    return false;
-  }
-}
-
-async function updateCleanupTaskStateInDB(channelId, isRunning) {
-  if (await isDbConnected()) {
-    // Update the database to set the state of cleanup tasks for the channel
-    const queryText = `
-      UPDATE recurring_cleanups SET is_running = $1 WHERE channel_id = $2
-    `;
-    try {
-      await db.query(queryText, [isRunning, channelId]);
-    } catch (error) {
-      logger.error(`Failed to update cleanup task state for channel ${channelId} in DB: ${error}`);
-    }
-  } else {
-    // Fallback to in-memory storage
-    if (isRunning) {
-      recurringCleanupsMap.set(channelId, { isRunning });
-    } else {
-      recurringCleanupsMap.delete(channelId);
-    }
-  }
-}
-
-async function cleanupMessages(channel, periodInput, guildId) {
-  const channelId = channel.id;
-  const threshold = calculateThreshold(periodInput);
-  if (threshold === null) {
-    logger.warn({ message: `Invalid period input: ${periodInput} in channel: ${channel.name}`, guildId: guildId });
-    return;
-  }
-
-  if (!channel.permissionsFor(client.user).has(PermissionFlagsBits.ManageMessages | PermissionFlagsBits.ReadMessageHistory)) {
-    logger.warn({ message: `Permission denied for managing messages in channel: ${channel.name}`, guildId: guildId });
-    return;
-  }
-
-  const isRunning = await isCleanupTaskRunning(channelId);
-  if (isRunning) {
-    logger.warn(`Cleanup task is already running for channel ${channelId}`);
-    return; // Exit if a cleanup task is already running
-  }
-  
-  await updateCleanupTaskStateInDB(channelId, true);
-  logger.info({ message: `Initiating cleanup for messages older than ${periodInput} in ${channel.name}.`, guildId: guildId });
-
-  try {
-    let totalDeleted = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      logger.info({ message: `Fetching messages in ${channel.name}.`, guildId: guildId });
-
-      const messages = await channel.messages.fetch({ limit: 100 }).catch(error => {
-        logger.error({ message: `Failed to fetch messages: ${error}`, guildId: guildId });
-        hasMore = false;
-      });
-
-      if (!messages || messages.size === 0) {
-        logger.info({ message: `No more messages to fetch in ${channel.name}.`, guildId: guildId });
-        hasMore = false;
-        break;
-      }
-
-      const oldMessages = messages.filter((message) => message.createdTimestamp < threshold);
-      let pendingDeletions = oldMessages.size;
-
-      if (oldMessages.size > 0) {
-        logger.info({ message: `Starting deletion of ${pendingDeletions} messages in ${channel.name}.`, guildId: guildId });
-
-        const deletePromises = oldMessages.map((message) => message.delete().catch((error) => {
-          logger.error({ message: `Failed to delete message ${message.id}: ${error}`, guildId: guildId });
-        }).finally(() => {
-          pendingDeletions--;
-          logger.info({ message: `${pendingDeletions} deletions remaining in ${channel.name}.`, guildId: guildId });
-        }));
-
-        await Promise.all(deletePromises);
-        totalDeleted += oldMessages.size;
-      } else {
-        logger.info({ message: `No messages older than threshold found in the current batch in ${channel.name}.`, guildId: guildId });
-      }
-
-      if (oldMessages.size < 100) {
-        hasMore = false;
-      }
-    }
-
-    logger.info({ message: `Cleanup completed. Deleted a total of ${totalDeleted} messages in ${channel.name}.`, guildId: guildId });
-  } catch (error) {
-    logger.error(`Error occurred during cleanup for channel ${channelId}: ${error}`);
-  } finally {
-    await updateCleanupTaskStateInDB(channelId, false);
-  }
-}
-
-async function setRecurringCleanup(channelId, guildId, intervalMinutes) {
-  // Check if a cleanup task is already running for the specified channel
-  const isRunning = await isCleanupTaskRunning(channelId);
-  if (isRunning) {
-    logger.warn(`Recurring cleanup task already exists for channel ${channelId}`);
-    return;
-  }
-
-  if (await isDbConnected()) {
-    // Insert or update recurring cleanup task in the database
-    const queryText = `
-      INSERT INTO recurring_cleanups (channel_id, guild_id, cleanup_interval)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (channel_id) 
-      DO UPDATE SET cleanup_interval = EXCLUDED.cleanup_interval, last_cleanup = CURRENT_TIMESTAMP
-    `;
-    try {
-      await db.query(queryText, [channelId, guildId, intervalMinutes]);
-      logger.info(`Recurring cleanup set for channel ${channelId} with interval ${intervalMinutes} minutes.`);
-    } catch (error) {
-      logger.error(`Failed to set recurring cleanup for channel ${channelId}: ${error}`);
-    }
-  } else {
-    // Fallback to in-memory storage
-    recurringCleanupsMap.set(channelId, { isRunning: true });
-
-    // Start the recurring cleanup task
-    const intervalId = setInterval(async () => {
-      const channel = await client.channels.fetch(channelId).catch(logger.error);
-      if (channel) {
-        await cleanupMessages(channel, `${intervalMinutes}m`, guildId);
-      }
-    }, intervalMinutes * 60 * 1000); // Convert minutes to milliseconds
-
-    // Save the interval ID for future reference (e.g., to clear the interval if needed)
-    recurringCleanupsMap.set(channelId, { guildId, intervalMinutes, intervalId });
-
-    logger.info(`Recurring cleanup set for channel ${channelId} with interval ${intervalMinutes} minutes (in-memory).`);
-  }
-}
-
-client.once('ready', () => {
-  logger.info('Discord bot is ready');
 });
 
-client.on('interactionCreate', async (interaction) => {
+server.listen(HEALTH_CHECK_PORT, () => {
+  logger.info(`Health check server is listening on port ${HEALTH_CHECK_PORT}`);
+});
+
+client.once(Events.ClientReady, () => {
+  logger.info(`Logged in as ${client.user.tag}`);
+});
+
+client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isCommand()) return;
 
-  const { commandName, options, guildId } = interaction;
-  const channel = options.getChannel('channel');
-  const periodInput = options.getString('age');
-
-  if (commandName === 'cleanup') {
-    await interaction.reply({
-      content: `Starting cleanup for messages older than ${periodInput} in ${channel.name}. This may take some time.`,
-      ephemeral: true,
-    });
-
-    cleanupMessages(channel, periodInput, guildId).then(() => {
-      interaction.followUp({
-        content: `Cleanup completed for messages older than ${periodInput}.`,
-        ephemeral: true,
-      });
-    });
-  } else if (commandName === 'setrecurringcleanup') {
-    const intervalMinutes = options.getInteger('interval');
-
-    await setRecurringCleanup(channel.id, guildId, intervalMinutes);
-
-    await interaction.reply({
-      content: `Recurring cleanup set for every ${intervalMinutes} minutes in ${channel.name}.`,
-      ephemeral: true,
-    });
-  } else if (commandName === 'setreminder') {
-    const time = options.getString('time');
-    const message = options.getString('message');
-
-    // Parse the time to calculate when the reminder should be sent
-    const parsedTime = parseTime(time);
-
-    if (!parsedTime) {
-      await interaction.reply({
-        content: 'Invalid time format. Please use "10m", "1h30m", etc.',
-        ephemeral: true,
-      });
-      return;
+  try {
+    switch (interaction.commandName) {
+      case 'setreminder':
+        await handleReminderCommand(interaction);
+        break;
+      case 'cleanup':
+        await handleCleanupCommand(interaction);
+        break;
+      case 'setrecurringcleanup':
+        const channel = interaction.options.getChannel('channel');
+        const periodInput = interaction.options.getString('age');
+        const intervalMinutes = interaction.options.getInteger('interval');
+        await setRecurringCleanup(channel.id, interaction.guildId, intervalMinutes, client, periodInput);
+        await interaction.reply({ 
+          content: `Recurring cleanup set for ${channel} every ${intervalMinutes} minutes, cleaning messages older than ${periodInput}.`, 
+          ephemeral: true 
+        });
+        break;
+      case 'viewcleanupschedule':
+        const schedule = await viewCleanupSchedule();
+        await interaction.reply({ content: schedule, ephemeral: true });
+        break;
+      case 'cancelrecurringcleanup':
+        const channelToCancel = interaction.options.getChannel('channel');
+        await cancelRecurringCleanup(channelToCancel.id);
+        await interaction.reply({ 
+          content: `Recurring cleanup cancelled for ${channelToCancel}.`, 
+          ephemeral: true 
+        });
+        break;
+      case 'editrecurringcleanup':
+        const channelToEdit = interaction.options.getChannel('channel');
+        const newInterval = interaction.options.getInteger('interval');
+        await editRecurringCleanup(channelToEdit.id, newInterval);
+        await interaction.reply({ 
+          content: `Recurring cleanup interval updated to ${newInterval} minutes for ${channelToEdit}.`, 
+          ephemeral: true 
+        });
+        break;
+      case 'help':
+        await handleHelpCommand(interaction);
+        break;
+      default:
+        await interaction.reply({ 
+          content: 'Unknown command. Use /help to see available commands.', 
+          ephemeral: true 
+        });
     }
-
-    // Set a timeout to send the reminder
-    setTimeout(async () => {
-      await interaction.followUp({
-        content: `⏰ Reminder: ${message}`,
-        ephemeral: true,
-      });
-    }, parsedTime);
+  } catch (error) {
+    logger.error('Error handling command:', error);
+    const errorMessage = error.message || 'An error occurred while processing the command.';
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ content: errorMessage, ephemeral: true });
+    } else {
+      await interaction.reply({ content: errorMessage, ephemeral: true });
+    }
   }
 });
 
-client.login(process.env.DISCORD_BOT_TOKEN);
+// Handle process termination
+async function shutdown() {
+  logger.info('Shutting down gracefully...');
+  try {
+    cleanupAllRecurringTasks();
+    server.close(() => {
+      logger.info('Health check server closed');
+      process.exit(0);
+    });
+  } catch (error) {
+    logger.error('Error during shutdown:', error);
+    process.exit(1);
+  }
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+client.login(process.env.DISCORD_BOT_TOKEN).catch(error => {
+  logger.error('Failed to login:', error);
+  process.exit(1);
+});

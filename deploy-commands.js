@@ -1,6 +1,6 @@
-require('dotenv').config();
-const { REST } = require('@discordjs/rest');
-const { Routes } = require('discord-api-types/v9');
+import 'dotenv/config';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v10';
 
 const commands = [
   {
@@ -37,6 +37,12 @@ const commands = [
         description: 'Period before cleaning up the messages (e.g., "30s", "15m", "1h")',
         required: true,
       },
+      {
+        name: 'preview',
+        type: 5,
+        description: 'Preview what would be deleted without actually deleting',
+        required: false,
+      },
     ],
   },
   {
@@ -63,9 +69,47 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'viewcleanupschedule',
+    description: 'View all active recurring cleanup schedules',
+  },
+  {
+    name: 'cancelrecurringcleanup',
+    description: 'Cancel a recurring cleanup task for a channel',
+    options: [
+      {
+        name: 'channel',
+        type: 7,
+        description: 'The channel to cancel the recurring cleanup for',
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'editrecurringcleanup',
+    description: 'Edit the interval of a recurring cleanup task for a channel',
+    options: [
+      {
+        name: 'channel',
+        type: 7,
+        description: 'The channel to edit the recurring cleanup for',
+        required: true,
+      },
+      {
+        name: 'interval',
+        type: 4,
+        description: 'New interval in minutes for the recurring cleanup',
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'help',
+    description: 'List all available commands and their descriptions',
+  },
 ];
 
-const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_BOT_TOKEN);
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
 (async () => {
   try {
