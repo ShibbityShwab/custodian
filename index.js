@@ -10,7 +10,15 @@ import {
   cleanupAllRecurringTasks
 } from './src/commands/recurring-cleanup.js';
 import { handleReminderCommand } from './src/commands/reminder.js';
+import { handleListRemindersCommand } from './src/commands/list-reminders.js';
+import { handleDeleteReminderCommand } from './src/commands/delete-reminder.js';
 import { handleHelpCommand } from './src/commands/help.js';
+import {
+  handleBackupCommand,
+  handleRestoreCommand,
+  handleListBackupsCommand
+} from './src/commands/db-manage.js';
+import { initDatabase, getPendingReminders } from './src/utils/db.js';
 import http from 'http';
 
 const client = new Client({
@@ -38,8 +46,36 @@ server.listen(HEALTH_CHECK_PORT, () => {
   logger.info(`Health check server is listening on port ${HEALTH_CHECK_PORT}`);
 });
 
-client.once(Events.ClientReady, () => {
+// Initialize database and load pending reminders
+async function initialize() {
+  await initDatabase();
+
+  // Load pending reminders from database
+  const pendingReminders = await getPendingReminders();
+
+  // Set up timeouts for pending reminders
+  for (const reminder of pendingReminders) {
+    const timeUntilReminder = reminder.reminder_time - Date.now();
+    if (timeUntilReminder > 0) {
+      setTimeout(async () => {
+        try {
+          const channel = await client.channels.fetch(reminder.channel_id);
+          if (channel) {
+            await channel.send(`⏰ Reminder: ${reminder.message}`);
+          }
+        } catch (error) {
+          logger.error('Error sending loaded reminder:', error);
+        }
+      }, timeUntilReminder);
+    }
+  }
+
+  logger.info(`Loaded ${pendingReminders.length} pending reminders`);
+}
+
+client.once(Events.ClientReady, async () => {
   logger.info(`Logged in as ${client.user.tag}`);
+  await initialize();
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -58,6 +94,12 @@ client.on(Events.InteractionCreate, async interaction => {
     switch (interaction.commandName) {
       case 'setreminder':
         await handleReminderCommand(interaction);
+        break;
+      case 'listreminders':
+        await handleListRemindersCommand(interaction);
+        break;
+      case 'deletereminder':
+        await handleDeleteReminderCommand(interaction);
         break;
       case 'cleanup':
         await handleCleanupCommand(interaction);
@@ -92,6 +134,15 @@ client.on(Events.InteractionCreate, async interaction => {
           content: `Recurring cleanup interval updated to ${newInterval} minutes for ${channelToEdit}.`,
           ephemeral: true
         });
+        break;
+      case 'backup':
+        await handleBackupCommand(interaction);
+        break;
+      case 'restore':
+        await handleRestoreCommand(interaction);
+        break;
+      case 'listbackups':
+        await handleListBackupsCommand(interaction);
         break;
       case 'help':
         await handleHelpCommand(interaction);

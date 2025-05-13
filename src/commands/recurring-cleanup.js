@@ -2,7 +2,7 @@ import { cleanupMessages } from './cleanup.js';
 import { isValidTimeFormat } from '../utils/parseTime.js';
 import logger from '../utils/logger.js';
 
-const recurringCleanupsMap = new Map();
+export const recurringCleanupsMap = new Map();
 
 function isCleanupTaskRunning(channelId) {
   return recurringCleanupsMap.has(channelId) && recurringCleanupsMap.get(channelId).isRunning;
@@ -21,7 +21,9 @@ export async function setRecurringCleanup(channelId, guildId, intervalMinutes, c
     throw new Error('Invalid period format. Use format like "30s", "15m", or "1h"');
   }
 
-  if (isCleanupTaskRunning(channelId)) {
+  // Check if a task is already running
+  const existingTask = recurringCleanupsMap.get(channelId);
+  if (existingTask && existingTask.isRunning) {
     throw new Error('A recurring cleanup task is already running for this channel');
   }
 

@@ -8,6 +8,12 @@ const commands = [
     description: 'Set a reminder for a specific time',
     options: [
       {
+        name: 'channel',
+        type: 7,
+        description: 'The channel to set the reminder in',
+        required: true,
+      },
+      {
         name: 'time',
         type: 3,
         description: 'Time for the reminder (e.g., "10m", "1h30m")',
@@ -17,6 +23,30 @@ const commands = [
         name: 'message',
         type: 3,
         description: 'Reminder message',
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'listreminders',
+    description: 'List all active reminders',
+    options: [
+      {
+        name: 'channel',
+        type: 7,
+        description: 'Filter reminders by channel (optional)',
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'deletereminder',
+    description: 'Delete a reminder',
+    options: [
+      {
+        name: 'id',
+        type: 3,
+        description: 'ID of the reminder to delete',
         required: true,
       },
     ],
@@ -63,7 +93,7 @@ const commands = [
       },
       {
         name: 'interval',
-        type: 4, // Integer type for the interval in minutes
+        type: 4,
         description: 'Interval in minutes for the recurring cleanup',
         required: true,
       },
@@ -102,6 +132,26 @@ const commands = [
         required: true,
       },
     ],
+  },
+  {
+    name: 'backup',
+    description: 'Create a database backup (requires database enabled)',
+  },
+  {
+    name: 'restore',
+    description: 'Restore from a database backup (requires database enabled)',
+    options: [
+      {
+        name: 'backup',
+        type: 3,
+        description: 'Name of the backup file to restore from',
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'listbackups',
+    description: 'List available database backups (requires database enabled)',
   },
   {
     name: 'help',
