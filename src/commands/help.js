@@ -43,4 +43,4 @@ export async function handleHelpCommand(interaction) {
     .setFooter({ text: 'Use / before each command to execute it' });
 
   await interaction.reply({ embeds: [embed], ephemeral: true });
-} 
+}

@@ -2,12 +2,12 @@ import 'dotenv/config';
 import { Client, GatewayIntentBits, Events } from 'discord.js';
 import logger from './src/utils/logger.js';
 import { handleCleanupCommand } from './src/commands/cleanup.js';
-import { 
-  setRecurringCleanup, 
-  viewCleanupSchedule, 
-  cancelRecurringCleanup, 
+import {
+  setRecurringCleanup,
+  viewCleanupSchedule,
+  cancelRecurringCleanup,
   editRecurringCleanup,
-  cleanupAllRecurringTasks 
+  cleanupAllRecurringTasks
 } from './src/commands/recurring-cleanup.js';
 import { handleReminderCommand } from './src/commands/reminder.js';
 import { handleHelpCommand } from './src/commands/help.js';
@@ -46,6 +46,15 @@ client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isCommand()) return;
 
   try {
+    // Declare all variables outside the switch statement
+    let channel;
+    let periodInput;
+    let intervalMinutes;
+    let schedule;
+    let channelToCancel;
+    let channelToEdit;
+    let newInterval;
+
     switch (interaction.commandName) {
       case 'setreminder':
         await handleReminderCommand(interaction);
@@ -54,43 +63,43 @@ client.on(Events.InteractionCreate, async interaction => {
         await handleCleanupCommand(interaction);
         break;
       case 'setrecurringcleanup':
-        const channel = interaction.options.getChannel('channel');
-        const periodInput = interaction.options.getString('age');
-        const intervalMinutes = interaction.options.getInteger('interval');
+        channel = interaction.options.getChannel('channel');
+        periodInput = interaction.options.getString('age');
+        intervalMinutes = interaction.options.getInteger('interval');
         await setRecurringCleanup(channel.id, interaction.guildId, intervalMinutes, client, periodInput);
-        await interaction.reply({ 
-          content: `Recurring cleanup set for ${channel} every ${intervalMinutes} minutes, cleaning messages older than ${periodInput}.`, 
-          ephemeral: true 
+        await interaction.reply({
+          content: `Recurring cleanup set for ${channel} every ${intervalMinutes} minutes, cleaning messages older than ${periodInput}.`,
+          ephemeral: true
         });
         break;
       case 'viewcleanupschedule':
-        const schedule = await viewCleanupSchedule();
+        schedule = await viewCleanupSchedule();
         await interaction.reply({ content: schedule, ephemeral: true });
         break;
       case 'cancelrecurringcleanup':
-        const channelToCancel = interaction.options.getChannel('channel');
+        channelToCancel = interaction.options.getChannel('channel');
         await cancelRecurringCleanup(channelToCancel.id);
-        await interaction.reply({ 
-          content: `Recurring cleanup cancelled for ${channelToCancel}.`, 
-          ephemeral: true 
+        await interaction.reply({
+          content: `Recurring cleanup cancelled for ${channelToCancel}.`,
+          ephemeral: true
         });
         break;
       case 'editrecurringcleanup':
-        const channelToEdit = interaction.options.getChannel('channel');
-        const newInterval = interaction.options.getInteger('interval');
+        channelToEdit = interaction.options.getChannel('channel');
+        newInterval = interaction.options.getInteger('interval');
         await editRecurringCleanup(channelToEdit.id, newInterval);
-        await interaction.reply({ 
-          content: `Recurring cleanup interval updated to ${newInterval} minutes for ${channelToEdit}.`, 
-          ephemeral: true 
+        await interaction.reply({
+          content: `Recurring cleanup interval updated to ${newInterval} minutes for ${channelToEdit}.`,
+          ephemeral: true
         });
         break;
       case 'help':
         await handleHelpCommand(interaction);
         break;
       default:
-        await interaction.reply({ 
-          content: 'Unknown command. Use /help to see available commands.', 
-          ephemeral: true 
+        await interaction.reply({
+          content: 'Unknown command. Use /help to see available commands.',
+          ephemeral: true
         });
     }
   } catch (error) {

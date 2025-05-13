@@ -70,4 +70,4 @@ export function isValidTimeFormat(timeStr) {
     return false;
   }
   return /^(\d+)(s|m|h)$/.test(timeStr);
-} 
+}

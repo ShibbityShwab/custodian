@@ -17,4 +17,4 @@ describe('parseTime', () => {
   it('returns 0 for invalid input', () => {
     expect(parseTime('abc')).toBe(0);
   });
-}); 
+});

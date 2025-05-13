@@ -118,7 +118,7 @@ export function editRecurringCleanup(channelId, newIntervalMinutes) {
   if (task.intervalId) {
     clearInterval(task.intervalId);
     recurringCleanupsMap.delete(channelId);
-    
+
     // Restart the task with the new interval
     setRecurringCleanup(
       channelId,
@@ -127,7 +127,7 @@ export function editRecurringCleanup(channelId, newIntervalMinutes) {
       task.client,
       task.periodInput
     );
-    
+
     logger.info(`Recurring cleanup edited for channel ${channelId} to interval ${newIntervalMinutes} minutes`);
     return true;
   }
@@ -143,4 +143,4 @@ export function cleanupAllRecurringTasks() {
     }
   });
   recurringCleanupsMap.clear();
-} 
+}

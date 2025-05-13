@@ -162,4 +162,4 @@ export async function handleCleanupCommand(interaction) {
     logger.error('Error in cleanup command:', error);
     await interaction.reply({ content: `Error: ${error.message}`, ephemeral: true });
   }
-} 
+}
