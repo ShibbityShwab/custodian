@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # Keep npm deps up to date weekly
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Bangkok"
+    open-pull-requests-limit: 5
+    reviewers: []
+    labels:
+      - "dependencies"
+    # Group all patch + minor updates together to reduce PR noise
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Keep GitHub Actions up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Bangkok"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"

@@ -22,3 +22,7 @@ database_id = "7fef2289-37c2-42ca-be3a-5c0d87b11a12"
 # 1 440 invocations / day — well within the free tier (100 k / day).
 [triggers]
 crons = ["* * * * *"]
+
+# Workers Observability — free tier, enables request logs in Cloudflare dashboard.
+[observability]
+enabled = true
