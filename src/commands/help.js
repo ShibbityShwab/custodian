@@ -1,4 +1,4 @@
-export async function handleHelpCommand(interaction) {
+export async function handleHelpCommand() {
   return {
     type: 4,
     data: {

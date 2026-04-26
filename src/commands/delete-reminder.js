@@ -22,7 +22,7 @@ export async function handleDeleteReminderCommand(interaction, db) {
     return {
       type: 4,
       data: {
-        content: `Failed to delete reminder. It might not exist or there was a database error.`,
+        content: 'Failed to delete reminder. It might not exist or there was a database error.',
         flags: 64,
       }
     };

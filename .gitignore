@@ -14,6 +14,9 @@ pids/
 # dotenv environment variables file
 .env
 
+# Wrangler local dev secrets (equivalent of .env for Workers)
+.dev.vars
+
 # dotenv environment variables file for development
 .env.development.local
 

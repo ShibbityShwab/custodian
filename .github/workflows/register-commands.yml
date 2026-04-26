@@ -1,0 +1,29 @@
+name: Register Discord Slash Commands
+
+# Run manually whenever you change src/commands/definitions.js
+on:
+  workflow_dispatch:
+
+jobs:
+  register:
+    name: Register slash commands with Discord API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Register slash commands
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+        run: node deploy-commands.js

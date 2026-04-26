@@ -14,8 +14,8 @@ export async function handleListRemindersCommand(interaction, db) {
     return {
       type: 4,
       data: {
-        content: channelId 
-          ? `No active reminders found for <#${channelId}>.` 
+        content: channelId
+          ? `No active reminders found for <#${channelId}>.`
           : 'No active reminders found.',
         flags: 64, // Ephemeral
       }

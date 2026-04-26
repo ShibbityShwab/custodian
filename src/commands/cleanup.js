@@ -37,12 +37,10 @@ export async function cleanupMessages(rest, channelId, periodInput, preview = fa
     if (preview) {
       totalDeleted += oldMessages.length;
     } else {
-      const messageIds = oldMessages.map(msg => msg.id);
-      
       // Discord bulk delete only accepts messages younger than 14 days
       const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
       const validForBulk = oldMessages.filter(msg => new Date(msg.timestamp).getTime() > fourteenDaysAgo).map(msg => msg.id);
-      
+
       if (validForBulk.length > 1) {
         await rest.post(Routes.channelBulkDelete(channelId), {
           body: { messages: validForBulk }
@@ -52,7 +50,7 @@ export async function cleanupMessages(rest, channelId, periodInput, preview = fa
         await rest.delete(Routes.channelMessage(channelId, validForBulk[0]));
         totalDeleted += 1;
       }
-      
+
       // Messages older than 14 days must be deleted one by one (slow)
       const tooOld = oldMessages.filter(msg => new Date(msg.timestamp).getTime() <= fourteenDaysAgo);
       for (const msg of tooOld) {
@@ -90,7 +88,7 @@ export async function handleCleanupCommand(interaction, env) {
   // Check permissions (default_member_permissions handles the UI, but we can double check)
   // To avoid timeout (3s limit), we will defer the response, but doing so makes it non-ephemeral by default
   // unless we specify flags in the defer.
-  
+
   // Return a deferred message
   // Then we will kick off a background task if possible, but in this function we can't easily access ctx.waitUntil
   // So we will just do the preview inline if it's preview, or if it's real we might hit the 3s timeout.
@@ -104,7 +102,7 @@ export async function handleCleanupCommand(interaction, env) {
         const resultMessage = preview
           ? `Preview complete. ${deletedCount} messages would be deleted.`
           : `Cleanup complete. Deleted ${deletedCount} messages.`;
-          
+
         await rest.patch(Routes.webhookMessage(env.CLIENT_ID, interaction.token, '@original'), {
           body: { content: resultMessage }
         });
