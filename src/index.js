@@ -28,7 +28,7 @@ app.use('/interactions', async (c, next) => {
   }
 
   const rawBody = await c.req.text();
-  const isValidRequest = verifyKey(
+  const isValidRequest = await verifyKey(
     rawBody,
     signature,
     timestamp,
