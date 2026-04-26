@@ -16,7 +16,7 @@ required = ["DISCORD_BOT_TOKEN", "CLIENT_ID", "PUBLIC_KEY"]
 [[d1_databases]]
 binding = "DB"
 database_name = "custodian_db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "7fef2289-37c2-42ca-be3a-5c0d87b11a12"
 
 # Cron trigger — fires every minute to process reminders & recurring cleanups.
 # 1 440 invocations / day — well within the free tier (100 k / day).
