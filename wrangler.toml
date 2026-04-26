@@ -1,0 +1,21 @@
+name = "custodian-bot"
+main = "src/index.js"
+compatibility_date = "2024-04-26"
+compatibility_flags = ["nodejs_compat"]
+
+# Environment variables
+[vars]
+# You will need to add these securely via `wrangler secret put` or Cloudflare dashboard for production:
+# DISCORD_BOT_TOKEN
+# CLIENT_ID
+# PUBLIC_KEY
+
+# Cloudflare D1 database binding
+[[d1_databases]]
+binding = "DB" # Available in your worker via env.DB
+database_name = "custodian_db"
+database_id = "00000000-0000-0000-0000-000000000000" # Replace with your D1 database ID later
+
+# Cron trigger for recurring tasks (runs every 1 minute)
+[triggers]
+crons = ["* * * * *"]

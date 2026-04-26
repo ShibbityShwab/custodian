@@ -12,7 +12,7 @@ export function parseTime(timeStr) {
     return 0;
   }
 
-  const regex = /(\d+)([smh])/g;
+  const regex = /(\d+)([smhdw])/g;
   let totalMs = 0;
   let match;
 
@@ -23,6 +23,8 @@ export function parseTime(timeStr) {
       case 's': totalMs += value * 1000; break;
       case 'm': totalMs += value * 60 * 1000; break;
       case 'h': totalMs += value * 60 * 60 * 1000; break;
+      case 'd': totalMs += value * 24 * 60 * 60 * 1000; break;
+      case 'w': totalMs += value * 7 * 24 * 60 * 60 * 1000; break;
     }
   }
 
@@ -39,7 +41,7 @@ export function calculateThreshold(periodInput) {
     return null;
   }
 
-  const periodRegex = /^(\d+)(s|m|h)$/;
+  const periodRegex = /^(\d+)(s|m|h|d|w)$/;
   const match = periodInput.match(periodRegex);
 
   if (!match) {
@@ -54,6 +56,8 @@ export function calculateThreshold(periodInput) {
     case 's': multiplier = 1000; break;
     case 'm': multiplier = 1000 * 60; break;
     case 'h': multiplier = 1000 * 60 * 60; break;
+    case 'd': multiplier = 1000 * 60 * 60 * 24; break;
+    case 'w': multiplier = 1000 * 60 * 60 * 24 * 7; break;
     default: return null;
   }
 
@@ -69,5 +73,5 @@ export function isValidTimeFormat(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') {
     return false;
   }
-  return /^(\d+)(s|m|h)$/.test(timeStr);
+  return /^(\d+)(s|m|h|d|w)$/.test(timeStr);
 }

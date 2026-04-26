@@ -1,48 +1,43 @@
-import { getPendingReminders } from '../utils/db.js';
-import { getAllReminders } from '../utils/reminderStore.js';
-import logger from '../utils/logger.js';
+import { getActiveRemindersByChannel } from '../utils/db.js';
 
-export async function handleListRemindersCommand(interaction) {
-  try {
-    const channel = interaction.options.getChannel('channel');
-    const useDatabase = process.env.USE_DATABASE === 'true';
+function getOption(options, name) {
+  return options?.find(opt => opt.name === name)?.value;
+}
 
-    let reminders;
-    if (useDatabase) {
-      reminders = await getPendingReminders();
-    } else {
-      reminders = getAllReminders();
-    }
+export async function handleListRemindersCommand(interaction, db) {
+  const options = interaction.data.options;
+  const channelId = getOption(options, 'channel');
 
-    // Filter by channel if specified
-    if (channel) {
-      reminders = reminders.filter(r => r.channel_id === channel.id || r.channelId === channel.id);
-    }
+  const reminders = await getActiveRemindersByChannel(db, channelId);
 
-    if (reminders.length === 0) {
-      await interaction.reply({
-        content: 'No active reminders found.',
-        ephemeral: true
-      });
-      return;
-    }
-
-    // Format reminders for display
-    const reminderList = reminders.map(r => {
-      const time = new Date(r.reminder_time || r.time);
-      const channelId = r.channel_id || r.channelId;
-      return `• ${r.message} (${time.toLocaleString()}) in <#${channelId}>`;
-    }).join('\n');
-
-    await interaction.reply({
-      content: `**Active Reminders:**\n${reminderList}`,
-      ephemeral: true
-    });
-  } catch (error) {
-    logger.error('Error listing reminders:', error);
-    await interaction.reply({
-      content: 'An error occurred while listing reminders.',
-      ephemeral: true
-    });
+  if (reminders.length === 0) {
+    return {
+      type: 4,
+      data: {
+        content: channelId 
+          ? `No active reminders found for <#${channelId}>.` 
+          : 'No active reminders found.',
+        flags: 64, // Ephemeral
+      }
+    };
   }
+
+  const fields = reminders.map(r => ({
+    name: `ID: ${r.id}`,
+    value: `**Channel:** <#${r.channel_id}>\n**Message:** ${r.message}\n**Time:** <t:${Math.floor(r.reminder_time / 1000)}:R>`,
+  }));
+
+  return {
+    type: 4,
+    data: {
+      embeds: [
+        {
+          title: 'Active Reminders',
+          color: 0x5865F2, // Blurple
+          fields: fields
+        }
+      ],
+      flags: 64,
+    }
+  };
 }

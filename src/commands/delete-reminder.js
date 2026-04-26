@@ -1,35 +1,30 @@
-import { deleteReminder as deleteDbReminder } from '../utils/db.js';
-import { deleteReminder as deleteMemoryReminder } from '../utils/reminderStore.js';
-import logger from '../utils/logger.js';
+import { deleteReminder } from '../utils/db.js';
 
-export async function handleDeleteReminderCommand(interaction) {
-  try {
-    const reminderId = interaction.options.getString('id');
-    const useDatabase = process.env.USE_DATABASE === 'true';
+function getOption(options, name) {
+  return options?.find(opt => opt.name === name)?.value;
+}
 
-    let success;
-    if (useDatabase) {
-      success = await deleteDbReminder(reminderId);
-    } else {
-      success = deleteMemoryReminder(reminderId);
-    }
+export async function handleDeleteReminderCommand(interaction, db) {
+  const options = interaction.data.options;
+  const id = getOption(options, 'id');
 
-    if (success) {
-      await interaction.reply({
-        content: 'Reminder deleted successfully.',
-        ephemeral: true
-      });
-    } else {
-      await interaction.reply({
-        content: 'Reminder not found or could not be deleted.',
-        ephemeral: true
-      });
-    }
-  } catch (error) {
-    logger.error('Error deleting reminder:', error);
-    await interaction.reply({
-      content: 'An error occurred while deleting the reminder.',
-      ephemeral: true
-    });
+  const success = await deleteReminder(db, id);
+
+  if (success) {
+    return {
+      type: 4,
+      data: {
+        content: `Successfully deleted reminder with ID ${id}.`,
+        flags: 64, // Ephemeral
+      }
+    };
+  } else {
+    return {
+      type: 4,
+      data: {
+        content: `Failed to delete reminder. It might not exist or there was a database error.`,
+        flags: 64,
+      }
+    };
   }
 }

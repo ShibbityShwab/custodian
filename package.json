@@ -24,20 +24,19 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "discord-interactions": "^4.4.0",
     "discord.js": "^14.14.1",
-    "dotenv": "^16.4.2",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7",
-    "winston": "^3.11.0"
+    "hono": "^4.12.15"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^1.6.1",
+    "dotenv": "^17.4.2",
     "eslint": "^8.57.0",
     "husky": "^9.0.11",
     "lint-staged": "^15.2.2",
-    "nodemon": "^3.1.0",
     "prettier": "^3.2.5",
-    "vitest": "^1.6.1"
+    "vitest": "^1.6.1",
+    "wrangler": "^4.85.0"
   },
   "lint-staged": {
     "*.js": [

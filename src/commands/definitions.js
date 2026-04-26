@@ -12,7 +12,7 @@ export const commands = [
       {
         name: 'time',
         type: 3,
-        description: 'Time for the reminder (e.g., "10m", "1h30m")',
+        description: 'Time for the reminder (e.g., "10m", "1h30m", "1d")',
         required: true,
       },
       {
@@ -41,7 +41,7 @@ export const commands = [
     options: [
       {
         name: 'id',
-        type: 3,
+        type: 4,
         description: 'ID of the reminder to delete',
         required: true,
       },
@@ -50,6 +50,7 @@ export const commands = [
   {
     name: 'cleanup',
     description: 'Immediately starts cleaning up messages older than the specified period in a channel',
+    default_member_permissions: '8192', // MANAGE_MESSAGES
     options: [
       {
         name: 'channel',
@@ -60,7 +61,7 @@ export const commands = [
       {
         name: 'age',
         type: 3,
-        description: 'Period before cleaning up the messages (e.g., "30s", "15m", "1h")',
+        description: 'Period before cleaning up the messages (e.g., "30s", "15m", "1h", "1d")',
         required: true,
       },
       {
@@ -74,6 +75,7 @@ export const commands = [
   {
     name: 'setrecurringcleanup',
     description: 'Sets up a recurring cleanup task in a channel at the specified interval',
+    default_member_permissions: '8192', // MANAGE_MESSAGES
     options: [
       {
         name: 'channel',
@@ -84,7 +86,7 @@ export const commands = [
       {
         name: 'age',
         type: 3,
-        description: 'Period before cleaning up messages (e.g., "30s", "15m", "1h")',
+        description: 'Period before cleaning up messages (e.g., "30s", "15m", "1h", "1d")',
         required: true,
       },
       {
@@ -98,10 +100,12 @@ export const commands = [
   {
     name: 'viewcleanupschedule',
     description: 'View all active recurring cleanup schedules',
+    default_member_permissions: '8192', // MANAGE_MESSAGES
   },
   {
     name: 'cancelrecurringcleanup',
     description: 'Cancel a recurring cleanup task for a channel',
+    default_member_permissions: '8192', // MANAGE_MESSAGES
     options: [
       {
         name: 'channel',
@@ -114,6 +118,7 @@ export const commands = [
   {
     name: 'editrecurringcleanup',
     description: 'Edit the interval of a recurring cleanup task for a channel',
+    default_member_permissions: '8192', // MANAGE_MESSAGES
     options: [
       {
         name: 'channel',
@@ -130,27 +135,7 @@ export const commands = [
     ],
   },
   {
-    name: 'backup',
-    description: 'Create a database backup (requires database enabled)',
-  },
-  {
-    name: 'restore',
-    description: 'Restore from a database backup (requires database enabled)',
-    options: [
-      {
-        name: 'backup',
-        type: 3,
-        description: 'Name of the backup file to restore from',
-        required: true,
-      },
-    ],
-  },
-  {
-    name: 'listbackups',
-    description: 'List available database backups (requires database enabled)',
-  },
-  {
     name: 'help',
     description: 'List all available commands and their descriptions',
   },
-]; 
+];

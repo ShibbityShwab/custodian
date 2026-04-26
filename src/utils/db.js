@@ -1,147 +1,102 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
-import logger from './logger.js';
-import fs from 'fs/promises';
-import path from 'path';
-
-let db = null;
-
-export async function initDatabase() {
-  if (!process.env.USE_DATABASE) {
-    logger.info('Database disabled, using in-memory storage');
-    return;
-  }
-
+export async function saveReminder(db, reminder) {
   try {
-    db = await open({
-      filename: process.env.DB_PATH || 'reminders.db',
-      driver: sqlite3.Database
-    });
-
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS reminders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        channel_id TEXT NOT NULL,
-        guild_id TEXT NOT NULL,
-        message TEXT NOT NULL,
-        reminder_time INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-      )
-    `);
-
-    logger.info('Database initialized successfully');
+    const { success } = await db.prepare(
+      'INSERT INTO reminders (channel_id, guild_id, message, reminder_time, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind(reminder.channelId, reminder.guildId, reminder.message, reminder.time, Date.now()).run();
+    return success;
   } catch (error) {
-    logger.error('Failed to initialize database:', error);
-    db = null;
+    console.error('Failed to save reminder:', error);
+    return false;
   }
 }
 
-export async function saveReminder(reminder) {
-  if (!db) return null;
-
+export async function getPendingReminders(db) {
   try {
-    const result = await db.run(
-      'INSERT INTO reminders (channel_id, guild_id, message, reminder_time, created_at) VALUES (?, ?, ?, ?, ?)',
-      [reminder.channelId, reminder.guildId, reminder.message, reminder.time, Date.now()]
-    );
-    return result.lastID;
+    const { results } = await db.prepare(
+      'SELECT * FROM reminders WHERE reminder_time <= ?'
+    ).bind(Date.now()).all();
+    return results || [];
   } catch (error) {
-    logger.error('Failed to save reminder:', error);
+    console.error('Failed to get pending reminders:', error);
+    return [];
+  }
+}
+
+export async function deleteReminder(db, id) {
+  try {
+    const { success } = await db.prepare('DELETE FROM reminders WHERE id = ?').bind(id).run();
+    return success;
+  } catch (error) {
+    console.error('Failed to delete reminder:', error);
+    return false;
+  }
+}
+
+export async function getActiveRemindersByChannel(db, channelId) {
+  try {
+    let query = 'SELECT * FROM reminders';
+    let results;
+    if (channelId) {
+      query += ' WHERE channel_id = ?';
+      const res = await db.prepare(query).bind(channelId).all();
+      results = res.results;
+    } else {
+      const res = await db.prepare(query).all();
+      results = res.results;
+    }
+    return results || [];
+  } catch (error) {
+    console.error('Failed to get active reminders:', error);
+    return [];
+  }
+}
+
+// Recurring cleanups
+export async function getRecurringCleanups(db) {
+  try {
+    const { results } = await db.prepare('SELECT * FROM recurring_cleanups').all();
+    return results || [];
+  } catch (error) {
+    console.error('Failed to get recurring cleanups:', error);
+    return [];
+  }
+}
+
+export async function getRecurringCleanup(db, channelId) {
+  try {
+    return await db.prepare('SELECT * FROM recurring_cleanups WHERE channel_id = ?').bind(channelId).first();
+  } catch (error) {
+    console.error('Failed to get recurring cleanup:', error);
     return null;
   }
 }
 
-export async function getPendingReminders() {
-  if (!db) return [];
-
+export async function saveRecurringCleanup(db, channelId, guildId, intervalMinutes, periodInput) {
   try {
-    return await db.all(
-      'SELECT * FROM reminders WHERE reminder_time > ?',
-      [Date.now()]
-    );
+    const { success } = await db.prepare(
+      'INSERT OR REPLACE INTO recurring_cleanups (channel_id, guild_id, interval_minutes, period_input, created_at, last_run) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(channelId, guildId, intervalMinutes, periodInput, Date.now(), Date.now()).run();
+    return success;
   } catch (error) {
-    logger.error('Failed to get pending reminders:', error);
-    return [];
-  }
-}
-
-export async function deleteReminder(id) {
-  if (!db) return false;
-
-  try {
-    await db.run('DELETE FROM reminders WHERE id = ?', [id]);
-    return true;
-  } catch (error) {
-    logger.error('Failed to delete reminder:', error);
+    console.error('Failed to save recurring cleanup:', error);
     return false;
   }
 }
 
-export async function cleanupOldReminders() {
-  if (!db) return;
-
+export async function updateRecurringCleanupLastRun(db, channelId, lastRun) {
   try {
-    await db.run('DELETE FROM reminders WHERE reminder_time <= ?', [Date.now()]);
+    await db.prepare('UPDATE recurring_cleanups SET last_run = ? WHERE channel_id = ?').bind(lastRun, channelId).run();
   } catch (error) {
-    logger.error('Failed to cleanup old reminders:', error);
+    console.error('Failed to update recurring cleanup last run:', error);
   }
 }
 
-export async function backupDatabase() {
-  if (!db) return false;
-
+export async function deleteRecurringCleanup(db, channelId) {
   try {
-    const backupPath = process.env.DB_BACKUP_PATH || 'backups';
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFile = path.join(backupPath, `reminders-${timestamp}.db`);
-
-    // Ensure backup directory exists
-    await fs.mkdir(backupPath, { recursive: true });
-
-    // Create backup
-    await db.backup(backupFile);
-    logger.info(`Database backed up to ${backupFile}`);
-    return true;
+    const { success } = await db.prepare('DELETE FROM recurring_cleanups WHERE channel_id = ?').bind(channelId).run();
+    return success;
   } catch (error) {
-    logger.error('Failed to backup database:', error);
+    console.error('Failed to delete recurring cleanup:', error);
     return false;
-  }
-}
-
-export async function restoreDatabase(backupFile) {
-  if (!db) return false;
-
-  try {
-    // Close current connection
-    await db.close();
-
-    // Copy backup file to database location
-    const dbPath = process.env.DB_PATH || 'reminders.db';
-    await fs.copyFile(backupFile, dbPath);
-
-    // Reopen database
-    db = await open({
-      filename: dbPath,
-      driver: sqlite3.Database
-    });
-
-    logger.info(`Database restored from ${backupFile}`);
-    return true;
-  } catch (error) {
-    logger.error('Failed to restore database:', error);
-    return false;
-  }
-}
-
-export async function listBackups() {
-  if (!db) return [];
-
-  try {
-    const backupPath = process.env.DB_BACKUP_PATH || 'backups';
-    const files = await fs.readdir(backupPath);
-    return files.filter(file => file.startsWith('reminders-') && file.endsWith('.db'));
-  } catch (error) {
-    logger.error('Failed to list backups:', error);
-    return [];
   }
 }

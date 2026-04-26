@@ -1,148 +1,178 @@
-import { cleanupMessages } from './cleanup.js';
 import { isValidTimeFormat } from '../utils/parseTime.js';
-import logger from '../utils/logger.js';
+import {
+  saveRecurringCleanup,
+  getRecurringCleanups,
+  deleteRecurringCleanup
+} from '../utils/db.js';
 
-export const recurringCleanupsMap = new Map();
-
-function isCleanupTaskRunning(channelId) {
-  return recurringCleanupsMap.has(channelId) && recurringCleanupsMap.get(channelId).isRunning;
+function getOption(options, name) {
+  return options?.find(opt => opt.name === name)?.value;
 }
 
-export async function setRecurringCleanup(channelId, guildId, intervalMinutes, client, periodInput) {
-  if (!channelId || !guildId || !intervalMinutes || !client || !periodInput) {
-    throw new Error('Missing required parameters for recurring cleanup');
-  }
+export async function setRecurringCleanup(interaction, db) {
+  const options = interaction.data.options;
+  const channelId = getOption(options, 'channel');
+  const periodInput = getOption(options, 'age');
+  const intervalMinutes = getOption(options, 'interval');
 
   if (intervalMinutes < 1) {
-    throw new Error('Interval must be at least 1 minute');
+    return {
+      type: 4,
+      data: {
+        content: 'Interval must be at least 1 minute.',
+        flags: 64,
+      }
+    };
   }
 
   if (!isValidTimeFormat(periodInput)) {
-    throw new Error('Invalid period format. Use format like "30s", "15m", or "1h"');
-  }
-
-  // Check if a task is already running
-  const existingTask = recurringCleanupsMap.get(channelId);
-  if (existingTask && existingTask.isRunning) {
-    throw new Error('A recurring cleanup task is already running for this channel');
-  }
-
-  const channel = await client.channels.fetch(channelId).catch(error => {
-    logger.error(`Failed to fetch channel ${channelId}:`, error);
-    throw new Error('Failed to fetch channel');
-  });
-
-  if (!channel) {
-    throw new Error('Channel not found');
-  }
-
-  // Start the recurring cleanup task
-  const intervalId = setInterval(async () => {
-    try {
-      await cleanupMessages(channel, periodInput, guildId);
-      const task = recurringCleanupsMap.get(channelId);
-      if (task) {
-        task.lastRun = Date.now();
-        recurringCleanupsMap.set(channelId, task);
+    return {
+      type: 4,
+      data: {
+        content: 'Invalid period format. Use format like "30s", "15m", "1h", "1d".',
+        flags: 64,
       }
-    } catch (error) {
-      logger.error(`Error in recurring cleanup for channel ${channelId}:`, error);
-      // If the channel is deleted or inaccessible, cancel the cleanup
-      if (error.code === 10003 || error.code === 50001) {
-        logger.info(`Cancelling recurring cleanup for channel ${channelId} due to channel access error`);
-        cancelRecurringCleanup(channelId);
-      }
-    }
-  }, intervalMinutes * 60 * 1000);
+    };
+  }
 
-  // Save the task details
-  recurringCleanupsMap.set(channelId, {
-    guildId,
+  const success = await saveRecurringCleanup(
+    db,
+    channelId,
+    interaction.guild_id,
     intervalMinutes,
-    intervalId,
-    periodInput,
-    isRunning: true,
-    lastRun: null,
-    client,
-    startTime: Date.now()
-  });
+    periodInput
+  );
 
-  logger.info(`Recurring cleanup set for channel ${channelId} with interval ${intervalMinutes} minutes`);
+  if (success) {
+    return {
+      type: 4,
+      data: {
+        content: `Recurring cleanup set for <#${channelId}> every ${intervalMinutes} minutes, cleaning messages older than ${periodInput}.`,
+        flags: 64,
+      }
+    };
+  } else {
+    return {
+      type: 4,
+      data: {
+        content: 'Failed to save recurring cleanup.',
+        flags: 64,
+      }
+    };
+  }
 }
 
-export function viewCleanupSchedule() {
-  if (recurringCleanupsMap.size === 0) {
-    return 'No active recurring cleanups.';
+export async function viewCleanupSchedule(interaction, db) {
+  const cleanups = await getRecurringCleanups(db);
+
+  if (cleanups.length === 0) {
+    return {
+      type: 4,
+      data: {
+        content: 'No active recurring cleanups.',
+        flags: 64,
+      }
+    };
   }
 
-  const schedule = [];
-  recurringCleanupsMap.forEach((value, channelId) => {
-    if (value.intervalId) {
-      const uptime = Math.floor((Date.now() - value.startTime) / 1000 / 60); // in minutes
-      schedule.push(
-        `Channel: <#${channelId}>\n` +
-        `• Interval: ${value.intervalMinutes} minutes\n` +
-        `• Age threshold: ${value.periodInput}\n` +
-        `• Last run: ${value.lastRun ? new Date(value.lastRun).toLocaleString() : 'Never'}\n` +
-        `• Running for: ${uptime} minutes\n`
-      );
+  const fields = cleanups.map(c => ({
+    name: `Channel: <#${c.channel_id}>`,
+    value: `**Interval:** ${c.interval_minutes} minutes\n**Age threshold:** ${c.period_input}\n**Last run:** <t:${Math.floor(c.last_run / 1000)}:R>`,
+  }));
+
+  return {
+    type: 4,
+    data: {
+      embeds: [
+        {
+          title: 'Active Recurring Cleanups',
+          color: 0x5865F2,
+          fields: fields
+        }
+      ],
+      flags: 64,
     }
-  });
-
-  return '**Active Recurring Cleanups:**\n\n' + schedule.join('\n');
+  };
 }
 
-export function cancelRecurringCleanup(channelId) {
-  const task = recurringCleanupsMap.get(channelId);
-  if (!task) {
-    throw new Error('No recurring cleanup task found for this channel');
-  }
+export async function cancelRecurringCleanup(interaction, db) {
+  const options = interaction.data.options;
+  const channelId = getOption(options, 'channel');
 
-  if (task.intervalId) {
-    clearInterval(task.intervalId);
-    recurringCleanupsMap.delete(channelId);
-    logger.info(`Recurring cleanup cancelled for channel ${channelId}`);
-    return true;
+  const success = await deleteRecurringCleanup(db, channelId);
+
+  if (success) {
+    return {
+      type: 4,
+      data: {
+        content: `Recurring cleanup cancelled for <#${channelId}>.`,
+        flags: 64,
+      }
+    };
+  } else {
+    return {
+      type: 4,
+      data: {
+        content: `No recurring cleanup found for <#${channelId}> or failed to delete.`,
+        flags: 64,
+      }
+    };
   }
-  return false;
 }
 
-export function editRecurringCleanup(channelId, newIntervalMinutes) {
-  if (newIntervalMinutes < 1) {
-    throw new Error('Interval must be at least 1 minute');
+export async function editRecurringCleanup(interaction, db) {
+  // Essentially the same as setRecurringCleanup but checking if it exists
+  const options = interaction.data.options;
+  const channelId = getOption(options, 'channel');
+  const intervalMinutes = getOption(options, 'interval');
+
+  if (intervalMinutes < 1) {
+    return {
+      type: 4,
+      data: {
+        content: 'Interval must be at least 1 minute.',
+        flags: 64,
+      }
+    };
   }
 
-  const task = recurringCleanupsMap.get(channelId);
-  if (!task) {
-    throw new Error('No recurring cleanup task found for this channel');
+  // We need to fetch it to preserve the period_input
+  const cleanups = await getRecurringCleanups(db);
+  const existing = cleanups.find(c => c.channel_id === channelId);
+
+  if (!existing) {
+    return {
+      type: 4,
+      data: {
+        content: `No recurring cleanup found for <#${channelId}>. Use \`/setrecurringcleanup\` instead.`,
+        flags: 64,
+      }
+    };
   }
 
-  if (task.intervalId) {
-    clearInterval(task.intervalId);
-    recurringCleanupsMap.delete(channelId);
+  const success = await saveRecurringCleanup(
+    db,
+    channelId,
+    interaction.guild_id,
+    intervalMinutes,
+    existing.period_input
+  );
 
-    // Restart the task with the new interval
-    setRecurringCleanup(
-      channelId,
-      task.guildId,
-      newIntervalMinutes,
-      task.client,
-      task.periodInput
-    );
-
-    logger.info(`Recurring cleanup edited for channel ${channelId} to interval ${newIntervalMinutes} minutes`);
-    return true;
+  if (success) {
+    return {
+      type: 4,
+      data: {
+        content: `Recurring cleanup interval updated to ${intervalMinutes} minutes for <#${channelId}>.`,
+        flags: 64,
+      }
+    };
+  } else {
+    return {
+      type: 4,
+      data: {
+        content: 'Failed to update recurring cleanup.',
+        flags: 64,
+      }
+    };
   }
-  return false;
-}
-
-// Cleanup function to be called on bot shutdown
-export function cleanupAllRecurringTasks() {
-  recurringCleanupsMap.forEach((task, channelId) => {
-    if (task.intervalId) {
-      clearInterval(task.intervalId);
-      logger.info(`Cleaned up recurring task for channel ${channelId}`);
-    }
-  });
-  recurringCleanupsMap.clear();
 }

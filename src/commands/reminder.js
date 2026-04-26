@@ -1,71 +1,63 @@
 import { parseTime } from '../utils/parseTime.js';
-import logger from '../utils/logger.js';
 import { saveReminder } from '../utils/db.js';
-import { addReminder } from '../utils/reminderStore.js';
 
-export async function handleReminderCommand(interaction) {
-  const channel = interaction.options.getChannel('channel');
-  const timeInput = interaction.options.getString('time');
-  const message = interaction.options.getString('message');
+function getOption(options, name) {
+  return options?.find(opt => opt.name === name)?.value;
+}
+
+export async function handleReminderCommand(interaction, db) {
+  const options = interaction.data.options;
+  const channelId = getOption(options, 'channel');
+  const timeInput = getOption(options, 'time');
+  const message = getOption(options, 'message');
 
   if (!message || message.trim() === '') {
-    await interaction.reply({
-      content: 'Please provide a message for the reminder.',
-      ephemeral: true
-    });
-    return;
-  }
-
-  try {
-    const milliseconds = parseTime(timeInput);
-    if (!milliseconds) {
-      await interaction.reply({
-        content: 'Invalid time format. Please use format like "30s", "5m", or "2h".',
-        ephemeral: true
-      });
-      return;
-    }
-
-    const reminderTime = Date.now() + milliseconds;
-
-    // Create reminder object
-    const reminder = {
-      channelId: channel.id,
-      guildId: interaction.guildId,
-      message: message,
-      time: reminderTime
-    };
-
-    // Try to save to database if enabled
-    const dbId = await saveReminder(reminder);
-
-    // If database save failed or is disabled, use in-memory storage
-    if (dbId === null) {
-      const memoryId = Date.now().toString();
-      addReminder(memoryId, reminder);
-    }
-
-    // Set the timeout
-    setTimeout(async () => {
-      try {
-        const targetChannel = await interaction.client.channels.fetch(channel.id);
-        if (targetChannel) {
-          await targetChannel.send(`⏰ Reminder: ${message}`);
-        }
-      } catch (error) {
-        logger.error('Error sending reminder:', error);
+    return {
+      type: 4,
+      data: {
+        content: 'Please provide a message for the reminder.',
+        flags: 64, // Ephemeral
       }
-    }, milliseconds);
-
-    await interaction.reply({
-      content: `Reminder set for ${channel} in ${timeInput}.`,
-      ephemeral: true
-    });
-  } catch (error) {
-    logger.error('Error setting reminder:', error);
-    await interaction.reply({
-      content: 'An error occurred while setting the reminder.',
-      ephemeral: true
-    });
+    };
   }
+
+  const milliseconds = parseTime(timeInput);
+  if (!milliseconds) {
+    return {
+      type: 4,
+      data: {
+        content: 'Invalid time format. Please use format like "30s", "5m", "2h", or "1d".',
+        flags: 64,
+      }
+    };
+  }
+
+  const reminderTime = Date.now() + milliseconds;
+
+  const reminder = {
+    channelId,
+    guildId: interaction.guild_id,
+    message,
+    time: reminderTime
+  };
+
+  const success = await saveReminder(db, reminder);
+
+  if (!success) {
+    return {
+      type: 4,
+      data: {
+        content: 'Failed to save the reminder to the database.',
+        flags: 64,
+      }
+    };
+  }
+
+  return {
+    type: 4,
+    data: {
+      content: `Reminder set for <#${channelId}> in ${timeInput}.`,
+      flags: 64,
+    }
+  };
 }
