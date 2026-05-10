@@ -9,7 +9,9 @@ const REQUIRED_ENV_VARS = ['DATABASE_URL', 'DISCORD_BOT_TOKEN', 'CLIENT_ID', 'PU
 function validateEnv() {
   const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
   if (missing.length > 0) {
-    logger.error(`Missing required environment variables: ${missing.join(', ')}`);
+    const errorMsg = `Missing required environment variables: ${missing.join(', ')}`;
+    logger.error(errorMsg);
+    console.error(errorMsg);
     process.exit(1);
   }
 }
