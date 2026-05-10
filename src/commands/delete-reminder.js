@@ -1,12 +1,13 @@
 import { deleteReminder } from '../utils/db.js';
-import { getOption } from '../utils/helpers.js';
+import { getOption, getInteractionUser } from '../utils/helpers.js';
 import { InteractionResponseType, MessageFlags } from '../constants.js';
 
 export async function handleDeleteReminderCommand(interaction) {
   const options = interaction.data.options;
   const id = getOption(options, 'id');
+  const userId = getInteractionUser(interaction);
 
-  const success = await deleteReminder(id);
+  const success = await deleteReminder(id, userId);
 
   if (success) {
     return {
@@ -20,7 +21,8 @@ export async function handleDeleteReminderCommand(interaction) {
     return {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        content: 'Failed to delete reminder. It might not exist or there was a database error.',
+        content:
+          'Failed to delete reminder. It may not exist or you do not have permission to delete it.',
         flags: MessageFlags.EPHEMERAL,
       },
     };

@@ -1,4 +1,4 @@
-import { calculateThreshold, isValidTimeFormat } from '../utils/parseTime.js';
+import { calculateThreshold, isValidPeriodFormat } from '../utils/parseTime.js';
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import { getOption } from '../utils/helpers.js';
@@ -10,7 +10,7 @@ const BATCH_SIZE = 100;
 const MAX_MESSAGES = 1000;
 
 export async function cleanupMessages(rest, channelId, periodInput, preview = false) {
-  if (!isValidTimeFormat(periodInput)) {
+  if (!isValidPeriodFormat(periodInput)) {
     throw new Error('Invalid period format. Use format like "30s", "15m", "1h", "1d"');
   }
 
@@ -78,7 +78,7 @@ export async function handleCleanupCommand(interaction) {
   const periodInput = getOption(options, 'age');
   const preview = getOption(options, 'preview') || false;
 
-  if (!isValidTimeFormat(periodInput)) {
+  if (!isValidPeriodFormat(periodInput)) {
     return {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
@@ -108,7 +108,7 @@ export async function handleCleanupCommand(interaction) {
         await rest.patch(
           Routes.webhookMessage(process.env.CLIENT_ID, interaction.token, '@original'),
           {
-            body: { content: `Error during cleanup: ${error.message}` },
+            body: { content: 'Cleanup failed. Check permissions and try again.' },
           }
         );
       }

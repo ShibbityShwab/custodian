@@ -25,7 +25,7 @@ export const commands = [
   },
   {
     name: 'listreminders',
-    description: 'List all active reminders',
+    description: 'List your active reminders',
     options: [
       {
         name: 'channel',
@@ -49,7 +49,8 @@ export const commands = [
   },
   {
     name: 'cleanup',
-    description: 'Immediately starts cleaning up messages older than the specified period in a channel',
+    description:
+      'Immediately starts cleaning up messages older than the specified period in a channel',
     default_member_permissions: '8192', // MANAGE_MESSAGES
     options: [
       {

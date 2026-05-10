@@ -62,11 +62,23 @@ export function calculateThreshold(periodInput) {
 }
 
 /**
- * Validates a time string format
+ * Validates a time string format (supports compounds like 1h30m, for reminders)
  * @param {string} timeStr - Time string to validate
  * @returns {boolean} Whether the time string is valid
  */
 export function isValidTimeFormat(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') {
+    return false;
+  }
+  return /^(\d+[smhdw])+$/.test(timeStr);
+}
+
+/**
+ * Validates a period string format (strict single-unit, for cleanups)
+ * @param {string} timeStr - Time string to validate
+ * @returns {boolean} Whether the time string is valid
+ */
+export function isValidPeriodFormat(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') {
     return false;
   }

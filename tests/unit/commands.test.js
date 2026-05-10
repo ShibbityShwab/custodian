@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { handleReminderCommand } from '../../src/commands/reminder.js';
 import { handleListRemindersCommand } from '../../src/commands/list-reminders.js';
 import { handleDeleteReminderCommand } from '../../src/commands/delete-reminder.js';
+import { handleHelpCommand } from '../../src/commands/help.js';
 import { InteractionResponseType, MessageFlags } from '../../src/constants.js';
 
 vi.mock('../../src/utils/db.js', () => ({
@@ -20,6 +21,7 @@ describe('Command handlers', () => {
   describe('handleReminderCommand', () => {
     const baseInteraction = {
       guild_id: 'guild1',
+      member: { user: { id: 'user1' } },
       data: {
         options: [
           { name: 'channel', value: 'channel1' },
@@ -64,6 +66,7 @@ describe('Command handlers', () => {
     it('should return success when saved', async () => {
       saveReminder.mockResolvedValue(true);
       const result = await handleReminderCommand(baseInteraction);
+      expect(saveReminder).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user1' }));
       expect(result.data.content).toContain('Reminder set for <#channel1>');
     });
 
@@ -79,8 +82,10 @@ describe('Command handlers', () => {
       getActiveRemindersByChannel.mockResolvedValue([]);
       const result = await handleListRemindersCommand({
         data: { options: [{ name: 'channel', value: 'ch1' }] },
+        member: { user: { id: 'user1' } },
       });
       expect(result.data.content).toContain('No active reminders');
+      expect(getActiveRemindersByChannel).toHaveBeenCalledWith('ch1', 'user1');
     });
 
     it('should return embed with reminders', async () => {
@@ -89,7 +94,9 @@ describe('Command handlers', () => {
       ]);
       const result = await handleListRemindersCommand({
         data: { options: [] },
+        member: { user: { id: 'user1' } },
       });
+      expect(getActiveRemindersByChannel).toHaveBeenCalledWith(undefined, 'user1');
       expect(result.data.embeds).toBeDefined();
       expect(result.data.embeds[0].title).toBe('Active Reminders');
     });
@@ -100,7 +107,9 @@ describe('Command handlers', () => {
       deleteReminder.mockResolvedValue(true);
       const result = await handleDeleteReminderCommand({
         data: { options: [{ name: 'id', value: 1 }] },
+        member: { user: { id: 'user1' } },
       });
+      expect(deleteReminder).toHaveBeenCalledWith(1, 'user1');
       expect(result.data.content).toContain('Successfully deleted');
     });
 
@@ -108,8 +117,19 @@ describe('Command handlers', () => {
       deleteReminder.mockResolvedValue(false);
       const result = await handleDeleteReminderCommand({
         data: { options: [{ name: 'id', value: 99 }] },
+        member: { user: { id: 'user1' } },
       });
+      expect(deleteReminder).toHaveBeenCalledWith(99, 'user1');
       expect(result.data.content).toContain('Failed to delete');
+    });
+  });
+
+  describe('handleHelpCommand', () => {
+    it('should return help embed', async () => {
+      const result = await handleHelpCommand();
+      expect(result.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
+      expect(result.data.embeds).toBeDefined();
+      expect(result.data.embeds[0].title).toBe('Custodian Bot Commands');
     });
   });
 });

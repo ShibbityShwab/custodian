@@ -1,4 +1,4 @@
-import { isValidTimeFormat } from '../utils/parseTime.js';
+import { isValidPeriodFormat } from '../utils/parseTime.js';
 import { saveRecurringCleanup, getRecurringCleanups, deleteRecurringCleanup } from '../utils/db.js';
 import { getOption } from '../utils/helpers.js';
 import { InteractionResponseType, MessageFlags } from '../constants.js';
@@ -19,7 +19,7 @@ export async function setRecurringCleanup(interaction) {
     };
   }
 
-  if (!isValidTimeFormat(periodInput)) {
+  if (!isValidPeriodFormat(periodInput)) {
     return {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
@@ -70,7 +70,7 @@ export async function viewCleanupSchedule() {
 
   const fields = cleanups.map((c) => ({
     name: `Channel: <#${c.channel_id}>`,
-    value: `**Interval:** ${c.interval_minutes} minutes\n**Age threshold:** ${c.period_input}\n**Last run:** <t:${Math.floor(c.last_run / 1000)}:R>`,
+    value: `**Interval:** ${c.interval_minutes} minutes\n**Age threshold:** ${c.period_input}\n**Last run:** ${c.last_run ? `<t:${Math.floor(c.last_run / 1000)}:R>` : 'Never'}`,
   }));
 
   return {
@@ -145,7 +145,8 @@ export async function editRecurringCleanup(interaction) {
     channelId,
     interaction.guild_id,
     intervalMinutes,
-    existing.period_input
+    existing.period_input,
+    true
   );
 
   if (success) {

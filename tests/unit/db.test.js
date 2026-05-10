@@ -64,14 +64,19 @@ describe('db.js', () => {
       const result = await saveReminder({
         channelId: '123',
         guildId: '456',
+        userId: '789',
         message: 'hello',
         time: 1_700_000_000_000,
       });
       expect(result).toBe(true);
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO reminders'),
-        expect.any(Array)
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO reminders'), [
+        '123',
+        '456',
+        '789',
+        'hello',
+        1_700_000_000_000,
+        expect.any(Number),
+      ]);
     });
 
     it('should return false on error', async () => {
@@ -79,6 +84,7 @@ describe('db.js', () => {
       const result = await saveReminder({
         channelId: '123',
         guildId: '456',
+        userId: '789',
         message: 'hello',
         time: 1_700_000_000_000,
       });
@@ -101,15 +107,23 @@ describe('db.js', () => {
   });
 
   describe('deleteReminder', () => {
-    it('should return true if rowCount > 0', async () => {
+    it('should return true if rowCount > 0 with userId', async () => {
+      mockQuery.mockResolvedValue({ rowCount: 1 });
+      const result = await deleteReminder(1, 'user1');
+      expect(result).toBe(true);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('user_id = $2'), [1, 'user1']);
+    });
+
+    it('should return true if rowCount > 0 without userId', async () => {
       mockQuery.mockResolvedValue({ rowCount: 1 });
       const result = await deleteReminder(1);
       expect(result).toBe(true);
+      expect(mockQuery).toHaveBeenCalledWith('DELETE FROM reminders WHERE id = $1', [1]);
     });
 
     it('should return false if rowCount is 0', async () => {
       mockQuery.mockResolvedValue({ rowCount: 0 });
-      const result = await deleteReminder(1);
+      const result = await deleteReminder(1, 'user1');
       expect(result).toBe(false);
     });
   });
@@ -119,12 +133,30 @@ describe('db.js', () => {
       mockQuery.mockResolvedValue({ rows: [{ id: 1 }] });
       const result = await getActiveRemindersByChannel('123');
       expect(result).toEqual([{ id: 1 }]);
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('WHERE channel_id = $1'), [
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('channel_id'),
+        expect.any(Array)
+      );
+    });
+
+    it('should filter by channel and user when provided', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 1 }] });
+      const result = await getActiveRemindersByChannel('123', 'user1');
+      expect(result).toEqual([{ id: 1 }]);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('channel_id'), [
         '123',
+        'user1',
       ]);
     });
 
-    it('should return all rows when channel omitted', async () => {
+    it('should filter by user when channel omitted', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ id: 1 }, { id: 2 }] });
+      const result = await getActiveRemindersByChannel(undefined, 'user1');
+      expect(result).toHaveLength(2);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('user_id'), ['user1']);
+    });
+
+    it('should return all rows when both omitted', async () => {
       mockQuery.mockResolvedValue({ rows: [{ id: 1 }, { id: 2 }] });
       const result = await getActiveRemindersByChannel();
       expect(result).toHaveLength(2);
@@ -171,6 +203,15 @@ describe('db.js', () => {
       mockQuery.mockRejectedValue(new Error('DB error'));
       const result = await saveRecurringCleanup('ch1', 'g1', 5, '1h');
       expect(result).toBe(false);
+    });
+
+    it('should use COALESCE for last_run when preserveLastRun is true', async () => {
+      mockQuery.mockResolvedValue({});
+      await saveRecurringCleanup('ch1', 'g1', 5, '1h', true);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('COALESCE(recurring_cleanups.last_run, EXCLUDED.last_run)'),
+        expect.any(Array)
+      );
     });
   });
 

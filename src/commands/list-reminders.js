@@ -1,12 +1,13 @@
 import { getActiveRemindersByChannel } from '../utils/db.js';
-import { getOption } from '../utils/helpers.js';
+import { getOption, getInteractionUser } from '../utils/helpers.js';
 import { InteractionResponseType, MessageFlags } from '../constants.js';
 
 export async function handleListRemindersCommand(interaction) {
   const options = interaction.data.options;
   const channelId = getOption(options, 'channel');
+  const userId = getInteractionUser(interaction);
 
-  const reminders = await getActiveRemindersByChannel(channelId);
+  const reminders = await getActiveRemindersByChannel(channelId, userId);
 
   if (reminders.length === 0) {
     return {
