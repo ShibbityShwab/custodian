@@ -1,24 +1,33 @@
 import { Hono } from 'hono';
 import { verifyKey } from 'discord-interactions';
-import { handleCleanupCommand } from './commands/cleanup.js';
+import { commands } from './commands/registry.js';
 import {
-  setRecurringCleanup,
-  viewCleanupSchedule,
-  cancelRecurringCleanup,
-  editRecurringCleanup
-} from './commands/recurring-cleanup.js';
-import { handleReminderCommand } from './commands/reminder.js';
-import { handleListRemindersCommand } from './commands/list-reminders.js';
-import { handleDeleteReminderCommand } from './commands/delete-reminder.js';
-import { handleHelpCommand } from './commands/help.js';
-import { getPendingReminders, getRecurringCleanups, deleteReminder } from './utils/db.js';
+  getPendingReminders,
+  getRecurringCleanups,
+  deleteReminder,
+  updateRecurringCleanupLastRun,
+  getPool,
+} from './utils/db.js';
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import { cleanupMessages } from './commands/cleanup.js';
+import { InteractionType, InteractionResponseType, MessageFlags } from './constants.js';
+import { logger } from './utils/logger.js';
 
 const app = new Hono();
 
-// Middleware to verify Discord requests
+app.get('/health', async (c) => {
+  let dbStatus = 'ok';
+  try {
+    await getPool().query('SELECT 1');
+  } catch (error) {
+    dbStatus = 'error';
+    logger.error(error, 'Health check DB query failed');
+  }
+  const status = dbStatus === 'ok' ? 200 : 503;
+  return c.json({ status: 'ok', db: dbStatus }, status);
+});
+
 app.use('/interactions', async (c, next) => {
   const signature = c.req.header('X-Signature-Ed25519');
   const timestamp = c.req.header('X-Signature-Timestamp');
@@ -28,12 +37,7 @@ app.use('/interactions', async (c, next) => {
   }
 
   const rawBody = await c.req.text();
-  const isValidRequest = await verifyKey(
-    rawBody,
-    signature,
-    timestamp,
-    c.env.PUBLIC_KEY
-  );
+  const isValidRequest = await verifyKey(rawBody, signature, timestamp, process.env.PUBLIC_KEY);
 
   if (!isValidRequest) {
     return c.text('Invalid signature', 401);
@@ -47,76 +51,41 @@ app.post('/interactions', async (c) => {
   const rawBody = c.get('rawBody');
   const interaction = JSON.parse(rawBody);
 
-  // Interaction type 1 is a PING request
-  if (interaction.type === 1) {
-    return c.json({ type: 1 });
+  if (interaction.type === InteractionType.PING) {
+    return c.json({ type: InteractionResponseType.PONG });
   }
 
-  // Interaction type 2 is an APPLICATION_COMMAND
-  if (interaction.type === 2) {
+  if (interaction.type === InteractionType.APPLICATION_COMMAND) {
     const { name } = interaction.data;
-    const db = c.env.DB;
-    const env = c.env;
+    const handler = commands.get(name);
 
     try {
-      switch (name) {
-        case 'setreminder': {
-          const remRes = await handleReminderCommand(interaction, db);
-          return c.json(remRes);
-        }
-        case 'listreminders': {
-          const listRes = await handleListRemindersCommand(interaction, db);
-          return c.json(listRes);
-        }
-        case 'deletereminder': {
-          const delRes = await handleDeleteReminderCommand(interaction, db);
-          return c.json(delRes);
-        }
-        case 'cleanup': {
-          const cleanRes = await handleCleanupCommand(interaction, env);
-          if (cleanRes._backgroundTask) {
-            c.executionCtx.waitUntil(cleanRes._backgroundTask());
-            return c.json(cleanRes.response);
-          }
-          return c.json(cleanRes);
-        }
-        case 'setrecurringcleanup': {
-          const setRecRes = await setRecurringCleanup(interaction, db);
-          return c.json(setRecRes);
-        }
-        case 'viewcleanupschedule': {
-          const viewRecRes = await viewCleanupSchedule(interaction, db);
-          return c.json(viewRecRes);
-        }
-        case 'cancelrecurringcleanup': {
-          const cancelRecRes = await cancelRecurringCleanup(interaction, db);
-          return c.json(cancelRecRes);
-        }
-        case 'editrecurringcleanup': {
-          const editRecRes = await editRecurringCleanup(interaction, db);
-          return c.json(editRecRes);
-        }
-        case 'help': {
-          const helpRes = await handleHelpCommand(interaction);
-          return c.json(helpRes);
-        }
-        default:
-          return c.json({
-            type: 4,
-            data: {
-              content: 'Unknown command.',
-              flags: 64, // Ephemeral
-            }
-          });
+      if (!handler) {
+        return c.json({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: 'Unknown command.',
+            flags: MessageFlags.EPHEMERAL,
+          },
+        });
       }
+
+      const result = await handler(interaction);
+
+      if (result && result._backgroundTask) {
+        result._backgroundTask().catch((err) => logger.error(err, 'Background task error'));
+        return c.json(result.response);
+      }
+
+      return c.json(result);
     } catch (error) {
-      console.error('Command Error:', error);
+      logger.error(error, 'Command Error');
       return c.json({
-        type: 4,
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
           content: `Error: ${error.message}`,
-          flags: 64,
-        }
+          flags: MessageFlags.EPHEMERAL,
+        },
       });
     }
   }
@@ -124,53 +93,44 @@ app.post('/interactions', async (c) => {
   return c.text('Unhandled interaction type', 400);
 });
 
-export default {
-  fetch: app.fetch,
+export async function runScheduledTasks() {
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
-  // Scheduled cron jobs (runs every minute via wrangler.toml cron trigger)
-  async scheduled(event, env, ctx) {
-    const db = env.DB;
-    const rest = new REST({ version: '10' }).setToken(env.DISCORD_BOT_TOKEN);
+  try {
+    const pendingReminders = await getPendingReminders();
+    for (const reminder of pendingReminders) {
+      try {
+        await rest.post(Routes.channelMessages(reminder.channel_id), {
+          body: {
+            content: `\u23f0 Reminder: ${reminder.message}`,
+          },
+        });
+        await deleteReminder(reminder.id);
+      } catch (error) {
+        logger.error(error, `Failed to send reminder to ${reminder.channel_id}`);
+      }
+    }
 
-    ctx.waitUntil(
-      (async () => {
-        // 1. Process pending reminders
-        const pendingReminders = await getPendingReminders(db);
-        for (const reminder of pendingReminders) {
-          try {
-            await rest.post(Routes.channelMessages(reminder.channel_id), {
-              body: {
-                content: `⏰ Reminder: ${reminder.message}`
-              }
-            });
-            await deleteReminder(db, reminder.id);
-          } catch (error) {
-            console.error(`Failed to send reminder to ${reminder.channel_id}:`, error);
-          }
+    const cleanups = await getRecurringCleanups();
+    const now = Date.now();
+
+    for (const cleanup of cleanups) {
+      const lastRun = cleanup.last_run || 0;
+      const intervalMs = cleanup.interval_minutes * 60 * 1000;
+
+      if (now - lastRun >= intervalMs) {
+        try {
+          logger.info(`Running scheduled cleanup for channel ${cleanup.channel_id}`);
+          await cleanupMessages(rest, cleanup.channel_id, cleanup.period_input, false);
+          await updateRecurringCleanupLastRun(cleanup.channel_id, now);
+        } catch (error) {
+          logger.error(error, `Scheduled cleanup failed for channel ${cleanup.channel_id}`);
         }
-
-        // 2. Process recurring cleanups
-        const cleanups = await getRecurringCleanups(db);
-        const now = Date.now();
-
-        for (const cleanup of cleanups) {
-          const lastRun = cleanup.last_run || 0;
-          const intervalMs = cleanup.interval_minutes * 60 * 1000;
-
-          if (now - lastRun >= intervalMs) {
-            try {
-              console.log(`Running scheduled cleanup for channel ${cleanup.channel_id}`);
-              await cleanupMessages(rest, cleanup.channel_id, cleanup.period_input, false);
-
-              await db.prepare('UPDATE recurring_cleanups SET last_run = ? WHERE channel_id = ?')
-                .bind(now, cleanup.channel_id)
-                .run();
-            } catch (error) {
-              console.error(`Scheduled cleanup failed for channel ${cleanup.channel_id}:`, error);
-            }
-          }
-        }
-      })()
-    );
+      }
+    }
+  } catch (error) {
+    logger.error(error, 'Scheduled tasks error');
   }
-};
+}
+
+export default app;

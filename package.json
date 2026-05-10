@@ -1,42 +1,51 @@
 {
   "name": "custodian",
   "version": "1.0.0",
-  "description": "A Discord bot for message cleanup and management — runs 100% free on Cloudflare Workers + D1",
+  "description": "A Discord bot for message cleanup and management — runs on Railway with PostgreSQL",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "db:migrate:local": "wrangler d1 execute custodian_db --local --file=./schema.sql",
-    "db:migrate:remote": "wrangler d1 execute custodian_db --remote --file=./schema.sql",
-    "register-commands": "node deploy-commands.js"
+    "db:migrate": "node src/migrate.js",
+    "register-commands": "node deploy-commands.js",
+    "prepare": "husky"
   },
   "keywords": [
     "discord",
     "bot",
     "cleanup",
     "moderation",
-    "cloudflare-workers"
+    "railway"
   ],
   "author": "ShibbityShwab",
   "license": "ISC",
   "dependencies": {
     "@discordjs/rest": "^2.4.0",
+    "@hono/node-server": "^1.13.0",
     "discord-api-types": "^0.37.97",
     "discord-interactions": "^4.4.0",
-    "hono": "^4.12.15"
+    "hono": "^4.12.15",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.0",
+    "pino": "^9.0.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.0",
     "dotenv": "^17.4.2",
     "eslint": "^8.57.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "pino-pretty": "^13.1.3",
     "prettier": "^3.2.5",
-    "vitest": "^3.2.0",
-    "wrangler": "^4.85.0"
+    "vitest": "^3.2.0"
   }
 }

@@ -1,43 +1,41 @@
 import { getActiveRemindersByChannel } from '../utils/db.js';
+import { getOption } from '../utils/helpers.js';
+import { InteractionResponseType, MessageFlags } from '../constants.js';
 
-function getOption(options, name) {
-  return options?.find(opt => opt.name === name)?.value;
-}
-
-export async function handleListRemindersCommand(interaction, db) {
+export async function handleListRemindersCommand(interaction) {
   const options = interaction.data.options;
   const channelId = getOption(options, 'channel');
 
-  const reminders = await getActiveRemindersByChannel(db, channelId);
+  const reminders = await getActiveRemindersByChannel(channelId);
 
   if (reminders.length === 0) {
     return {
-      type: 4,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
         content: channelId
           ? `No active reminders found for <#${channelId}>.`
           : 'No active reminders found.',
-        flags: 64, // Ephemeral
-      }
+        flags: MessageFlags.EPHEMERAL,
+      },
     };
   }
 
-  const fields = reminders.map(r => ({
+  const fields = reminders.map((r) => ({
     name: `ID: ${r.id}`,
     value: `**Channel:** <#${r.channel_id}>\n**Message:** ${r.message}\n**Time:** <t:${Math.floor(r.reminder_time / 1000)}:R>`,
   }));
 
   return {
-    type: 4,
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
       embeds: [
         {
           title: 'Active Reminders',
-          color: 0x5865F2, // Blurple
-          fields: fields
-        }
+          color: 0x5865f2,
+          fields: fields,
+        },
       ],
-      flags: 64,
-    }
+      flags: MessageFlags.EPHEMERAL,
+    },
   };
 }

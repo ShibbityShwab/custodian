@@ -1,17 +1,15 @@
 # Custodian
 
-Custodian is a Discord bot designed to assist with message management, including cleanup of old messages, reminders, and recurring tasks. It runs **100% for free** on Cloudflare Workers + Cloudflare D1 — no servers, no containers, no cost.
+Custodian is a Discord bot designed to assist with message management, including cleanup of old messages, reminders, and recurring tasks. It runs on **Railway** with **PostgreSQL**.
 
 ![Custodian Logo](logo.png)
 
 [![CI](https://github.com/ShibbityShwab/Custodian/actions/workflows/ci.yml/badge.svg)](https://github.com/ShibbityShwab/Custodian/actions/workflows/ci.yml)
-[![Deploy](https://github.com/ShibbityShwab/Custodian/actions/workflows/deploy.yml/badge.svg)](https://github.com/ShibbityShwab/Custodian/actions/workflows/deploy.yml)
 
 ## Features
 
-- **Serverless Architecture**: Cloudflare Workers free tier — 100 k requests / day, 24/7 uptime.
-- **Persistent Data**: Cloudflare D1 (SQLite) — free tier: 5 GB storage, 5 M reads, 100 k writes / day.
-- **Cron Processing**: Cloudflare Cron Triggers fire every minute to process reminders & recurring cleanups (1,440/day — well within the free 100 k/day limit).
+- **Persistent Data**: PostgreSQL for reminders and recurring cleanup schedules.
+- **Cron Processing**: `node-cron` fires every minute to process reminders & recurring cleanups.
 - **Message Cleanup**:
   - Immediate cleanup of messages older than a specified period (e.g. `1h`, `1d`)
   - Recurring cleanup tasks at user-defined intervals
@@ -25,12 +23,11 @@ Custodian is a Discord bot designed to assist with message management, including
 
 ## CI/CD
 
-Every push to `main` triggers **two** automatic GitHub Actions workflows:
+Every push to `main` triggers an automatic GitHub Actions workflow:
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| **CI** | push / PR | `npm ci` → lint → test |
-| **Deploy** | push to `main` | lint → test → D1 schema migration → `wrangler deploy` |
+| **CI** | push / PR | `npm ci` → audit → lint → test |
 | **Register Commands** | manual | Registers/updates Discord slash commands |
 
 ---
@@ -40,7 +37,7 @@ Every push to `main` triggers **two** automatic GitHub Actions workflows:
 ### Prerequisites
 
 - Node.js 20+
-- A **Cloudflare account** (Free tier)
+- A **Railway account** (or any platform with PostgreSQL support)
 - A **Discord Application/Bot** (Discord Developer Portal)
 - A GitHub repository with Actions enabled
 
@@ -64,122 +61,82 @@ npm install
 
 ---
 
-### 3. Cloudflare Setup
+### 3. Railway Setup
 
-Log in via Wrangler:
+1. Create a new project in Railway.
+2. Attach a **PostgreSQL** database to the project.
+3. Add the required environment variables (see step 4).
+4. Deploy from your GitHub repository.
 
-```bash
-npx wrangler login
-```
-
-Create the D1 database:
-
-```bash
-npx wrangler d1 create custodian_db
-```
-
-Copy the `database_id` UUID from the output and update `wrangler.toml`:
-
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "custodian_db"
-database_id = "YOUR-UUID-HERE"   # ← replace this
-```
-
-Generate a Cloudflare API Token at https://dash.cloudflare.com/profile/api-tokens using the **"Edit Cloudflare Workers"** template and add the **D1: Edit** permission.
+Railway automatically provides `DATABASE_URL`. You only need to add the Discord credentials.
 
 ---
 
-### 4. Set GitHub repository secrets
+### 4. Set environment variables
 
-In your repository → **Settings** → **Secrets and variables** → **Actions**, add:
+Copy `.env.example` to `.env` and fill in your values:
 
-| Secret | Value |
+```bash
+cp .env.example .env
+```
+
+| Variable | Value |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (from step 3) |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID (visible on any dashboard page) |
+| `DATABASE_URL` | PostgreSQL connection string (Railway provides this) |
 | `DISCORD_BOT_TOKEN` | Discord bot token |
 | `CLIENT_ID` | Discord Application ID |
+| `PUBLIC_KEY` | Discord Public Key |
+| `PORT` | HTTP port (default: 3000) |
 
 ---
 
-### 5. Set Cloudflare runtime secrets
-
-These are read by the Worker at runtime. Run once from your local machine:
+### 5. Apply the database schema
 
 ```bash
-npx wrangler secret put DISCORD_BOT_TOKEN
-npx wrangler secret put CLIENT_ID
-npx wrangler secret put PUBLIC_KEY
+npm run db:migrate
 ```
 
 ---
 
-### 6. Apply the D1 schema
+### 6. Register Slash Commands
 
 ```bash
-# Local (for development)
-npm run db:migrate:local
-
-# Production (once only — CI/CD handles this on every push after)
-npm run db:migrate:remote
-```
-
----
-
-### 7. Deploy
-
-Simply push to `main` — the **Deploy** workflow runs automatically.
-
-To deploy manually:
-
-```bash
-npm run deploy
-```
-
----
-
-### 8. Link Discord Interactions Endpoint
-
-1. Go to your Discord Developer Portal → **General Information**.
-2. Set **Interactions Endpoint URL** to your Worker URL:
-   ```
-   https://custodian-bot.<your-subdomain>.workers.dev/interactions
-   ```
-3. Save. Discord will verify the endpoint.
-
----
-
-### 9. Register Slash Commands
-
-Go to **Actions** → **Register Discord Slash Commands** → **Run workflow**.
-
-Or run locally:
-
-```bash
-# Requires a .env file with DISCORD_BOT_TOKEN and CLIENT_ID
+# Requires DISCORD_BOT_TOKEN and CLIENT_ID in your environment
 npm run register-commands
 ```
 
 ---
 
+### 7. Link Discord Interactions Endpoint
+
+1. Go to your Discord Developer Portal → **General Information**.
+2. Set **Interactions Endpoint URL** to your Railway app URL:
+   ```
+   https://your-app.railway.app/interactions
+   ```
+3. Save. Discord will verify the endpoint.
+
+---
+
 ## Local Development
 
-Create a `.dev.vars` file (gitignored) for local secrets:
+Create a `.env` file for local secrets (see `.env.example`):
 
 ```ini
+DATABASE_URL=postgresql://user:password@localhost:5432/custodian
 DISCORD_BOT_TOKEN=your_token_here
 CLIENT_ID=your_client_id_here
 PUBLIC_KEY=your_public_key_here
+PORT=3000
 ```
 
 Then run:
 
 ```bash
-npm run dev        # starts wrangler dev with hot reload
+npm run dev        # starts server with hot reload (Node.js --watch)
 npm test           # run tests
 npm run lint       # lint
+npm run db:migrate # apply database migrations
 ```
 
 ---
@@ -221,4 +178,4 @@ npm run lint       # lint
 
 ## License
 
-ISC License © 2024 ShibbityShwab
+ISC License 2024 ShibbityShwab

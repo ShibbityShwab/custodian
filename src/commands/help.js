@@ -1,6 +1,8 @@
+import { InteractionResponseType, MessageFlags } from '../constants.js';
+
 export async function handleHelpCommand() {
   return {
-    type: 4,
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
       embeds: [
         {
@@ -18,7 +20,7 @@ export async function handleHelpCommand() {
 \`/listreminders\` - List your active reminders
 \`/deletereminder\` - Delete a reminder by ID
 \`/help\` - Show this help message
-              `.trim()
+              `.trim(),
             },
             {
               name: '🧹 Cleanup Commands (Requires Manage Messages)',
@@ -41,15 +43,15 @@ export async function handleHelpCommand() {
 \`/editrecurringcleanup\` - Edit a recurring cleanup task
 • \`channel\`: The channel to edit the recurring cleanup for
 • \`interval\`: New interval in minutes
-              `.trim()
-            }
+              `.trim(),
+            },
           ],
           footer: {
-            text: 'Use / before each command to execute it'
-          }
-        }
+            text: 'Use / before each command to execute it',
+          },
+        },
       ],
-      flags: 64 // Ephemeral
-    }
+      flags: MessageFlags.EPHEMERAL,
+    },
   };
 }

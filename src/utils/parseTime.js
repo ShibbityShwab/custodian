@@ -2,6 +2,14 @@
  * Utility functions for parsing time strings and calculating thresholds
  */
 
+const UNITS = Object.freeze({
+  s: 1000,
+  m: 60 * 1000,
+  h: 60 * 60 * 1000,
+  d: 24 * 60 * 60 * 1000,
+  w: 7 * 24 * 60 * 60 * 1000,
+});
+
 /**
  * Parses a time string into milliseconds
  * @param {string} timeStr - Time string in format like '10m', '1h30m'
@@ -19,13 +27,7 @@ export function parseTime(timeStr) {
   while ((match = regex.exec(timeStr)) !== null) {
     const value = parseInt(match[1], 10);
     const unit = match[2];
-    switch (unit) {
-      case 's': totalMs += value * 1000; break;
-      case 'm': totalMs += value * 60 * 1000; break;
-      case 'h': totalMs += value * 60 * 60 * 1000; break;
-      case 'd': totalMs += value * 24 * 60 * 60 * 1000; break;
-      case 'w': totalMs += value * 7 * 24 * 60 * 60 * 1000; break;
-    }
+    totalMs += value * (UNITS[unit] || 0);
   }
 
   return totalMs;
@@ -50,15 +52,10 @@ export function calculateThreshold(periodInput) {
 
   const [, amount, unit] = match;
   const amountNumber = parseInt(amount, 10);
-  let multiplier;
+  const multiplier = UNITS[unit];
 
-  switch (unit) {
-    case 's': multiplier = 1000; break;
-    case 'm': multiplier = 1000 * 60; break;
-    case 'h': multiplier = 1000 * 60 * 60; break;
-    case 'd': multiplier = 1000 * 60 * 60 * 24; break;
-    case 'w': multiplier = 1000 * 60 * 60 * 24 * 7; break;
-    default: return null;
+  if (!multiplier) {
+    return null;
   }
 
   return Date.now() - amountNumber * multiplier;
