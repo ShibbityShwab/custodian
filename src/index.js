@@ -83,7 +83,7 @@ app.post('/interactions', async (c) => {
       return c.json({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: `Error: ${error.message}`,
+          content: 'An error occurred while processing the command. Please try again later.',
           flags: MessageFlags.EPHEMERAL,
         },
       });

@@ -1,7 +1,8 @@
-import { parseTime } from '../utils/parseTime.js';
+import { parseTime, isValidTimeFormat } from '../utils/parseTime.js';
 import { saveReminder } from '../utils/db.js';
-import { getOption } from '../utils/helpers.js';
+import { getOption, getInteractionUser } from '../utils/helpers.js';
 import { InteractionResponseType, MessageFlags } from '../constants.js';
+import { logger } from '../utils/logger.js';
 
 export async function handleReminderCommand(interaction) {
   const options = interaction.data.options;
@@ -19,8 +20,7 @@ export async function handleReminderCommand(interaction) {
     };
   }
 
-  const milliseconds = parseTime(timeInput);
-  if (!milliseconds) {
+  if (!isValidTimeFormat(timeInput)) {
     return {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
@@ -30,11 +30,13 @@ export async function handleReminderCommand(interaction) {
     };
   }
 
+  const milliseconds = parseTime(timeInput);
   const reminderTime = Date.now() + milliseconds;
 
   const reminder = {
     channelId,
     guildId: interaction.guild_id,
+    userId: getInteractionUser(interaction),
     message,
     time: reminderTime,
   };
@@ -42,10 +44,11 @@ export async function handleReminderCommand(interaction) {
   const success = await saveReminder(reminder);
 
   if (!success) {
+    logger.error({ reminder }, 'Failed to save reminder');
     return {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        content: 'Failed to save the reminder to the database.',
+        content: 'Failed to save the reminder. Please try again later.',
         flags: MessageFlags.EPHEMERAL,
       },
     };

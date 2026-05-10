@@ -28,8 +28,15 @@ export async function closePool() {
 export async function saveReminder(reminder) {
   try {
     await getPool().query(
-      'INSERT INTO reminders (channel_id, guild_id, message, reminder_time, created_at) VALUES ($1, $2, $3, $4, $5)',
-      [reminder.channelId, reminder.guildId, reminder.message, reminder.time, Date.now()]
+      'INSERT INTO reminders (channel_id, guild_id, user_id, message, reminder_time, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+      [
+        reminder.channelId,
+        reminder.guildId,
+        reminder.userId,
+        reminder.message,
+        reminder.time,
+        Date.now(),
+      ]
     );
     return true;
   } catch (error) {
@@ -50,9 +57,15 @@ export async function getPendingReminders() {
   }
 }
 
-export async function deleteReminder(id) {
+export async function deleteReminder(id, userId) {
   try {
-    const { rowCount } = await getPool().query('DELETE FROM reminders WHERE id = $1', [id]);
+    let query = 'DELETE FROM reminders WHERE id = $1';
+    const params = [id];
+    if (userId) {
+      query += ' AND (user_id = $2 OR user_id IS NULL)';
+      params.push(userId);
+    }
+    const { rowCount } = await getPool().query(query, params);
     return rowCount > 0;
   } catch (error) {
     logger.error(error, 'Failed to delete reminder');
@@ -60,13 +73,21 @@ export async function deleteReminder(id) {
   }
 }
 
-export async function getActiveRemindersByChannel(channelId) {
+export async function getActiveRemindersByChannel(channelId, userId) {
   try {
-    let query = 'SELECT * FROM reminders';
+    const conditions = [];
     const params = [];
     if (channelId) {
-      query += ' WHERE channel_id = $1';
+      conditions.push(`channel_id = $${conditions.length + 1}`);
       params.push(channelId);
+    }
+    if (userId) {
+      conditions.push(`(user_id = $${conditions.length + 1} OR user_id IS NULL)`);
+      params.push(userId);
+    }
+    let query = 'SELECT * FROM reminders';
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
     }
     const { rows } = await getPool().query(query, params);
     return rows || [];
@@ -99,18 +120,25 @@ export async function getRecurringCleanup(channelId) {
   }
 }
 
-export async function saveRecurringCleanup(channelId, guildId, intervalMinutes, periodInput) {
+export async function saveRecurringCleanup(
+  channelId,
+  guildId,
+  intervalMinutes,
+  periodInput,
+  preserveLastRun = false
+) {
   try {
+    const now = Date.now();
     await getPool().query(
       `INSERT INTO recurring_cleanups (channel_id, guild_id, interval_minutes, period_input, created_at, last_run)
-       VALUES ($1, $2, $3, $4, $5, $5)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (channel_id) DO UPDATE SET
          guild_id = EXCLUDED.guild_id,
          interval_minutes = EXCLUDED.interval_minutes,
          period_input = EXCLUDED.period_input,
          created_at = EXCLUDED.created_at,
-         last_run = EXCLUDED.last_run`,
-      [channelId, guildId, intervalMinutes, periodInput, Date.now()]
+         last_run = ${preserveLastRun ? 'COALESCE(recurring_cleanups.last_run, EXCLUDED.last_run)' : 'EXCLUDED.last_run'}`,
+      [channelId, guildId, intervalMinutes, periodInput, now, preserveLastRun ? null : now]
     );
     return true;
   } catch (error) {
