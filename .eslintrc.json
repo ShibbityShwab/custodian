@@ -8,6 +8,25 @@
     "ecmaVersion": "latest",
     "sourceType": "module"
   },
+  "overrides": [
+    {
+      "files": ["tests/**/*.js", "**/*.test.js"],
+      "env": {
+        "node": true,
+        "es2022": true
+      },
+      "globals": {
+        "describe": "readonly",
+        "it": "readonly",
+        "expect": "readonly",
+        "vi": "readonly",
+        "beforeEach": "readonly",
+        "afterEach": "readonly",
+        "beforeAll": "readonly",
+        "afterAll": "readonly"
+      }
+    }
+  ],
   "rules": {
     "no-unused-vars": "warn",
     "no-console": "off",

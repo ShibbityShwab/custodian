@@ -1,3 +1,4 @@
+-- Initial schema
 CREATE TABLE IF NOT EXISTS reminders (
   id SERIAL PRIMARY KEY,
   channel_id TEXT NOT NULL,

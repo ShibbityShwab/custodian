@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTime, calculateThreshold, isValidTimeFormat } from './parseTime.js';
+import { parseTime, calculateThreshold, isValidTimeFormat } from '../../src/utils/parseTime.js';
 
 describe('Time Utilities', () => {
   describe('parseTime', () => {

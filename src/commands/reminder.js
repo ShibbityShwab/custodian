@@ -1,11 +1,9 @@
 import { parseTime } from '../utils/parseTime.js';
 import { saveReminder } from '../utils/db.js';
+import { getOption } from '../utils/helpers.js';
+import { InteractionResponseType, MessageFlags } from '../constants.js';
 
-function getOption(options, name) {
-  return options?.find(opt => opt.name === name)?.value;
-}
-
-export async function handleReminderCommand(interaction, db) {
+export async function handleReminderCommand(interaction) {
   const options = interaction.data.options;
   const channelId = getOption(options, 'channel');
   const timeInput = getOption(options, 'time');
@@ -13,22 +11,22 @@ export async function handleReminderCommand(interaction, db) {
 
   if (!message || message.trim() === '') {
     return {
-      type: 4,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
         content: 'Please provide a message for the reminder.',
-        flags: 64, // Ephemeral
-      }
+        flags: MessageFlags.EPHEMERAL,
+      },
     };
   }
 
   const milliseconds = parseTime(timeInput);
   if (!milliseconds) {
     return {
-      type: 4,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
         content: 'Invalid time format. Please use format like "30s", "5m", "2h", or "1d".',
-        flags: 64,
-      }
+        flags: MessageFlags.EPHEMERAL,
+      },
     };
   }
 
@@ -38,26 +36,26 @@ export async function handleReminderCommand(interaction, db) {
     channelId,
     guildId: interaction.guild_id,
     message,
-    time: reminderTime
+    time: reminderTime,
   };
 
-  const success = await saveReminder(db, reminder);
+  const success = await saveReminder(reminder);
 
   if (!success) {
     return {
-      type: 4,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
         content: 'Failed to save the reminder to the database.',
-        flags: 64,
-      }
+        flags: MessageFlags.EPHEMERAL,
+      },
     };
   }
 
   return {
-    type: 4,
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
       content: `Reminder set for <#${channelId}> in ${timeInput}.`,
-      flags: 64,
-    }
+      flags: MessageFlags.EPHEMERAL,
+    },
   };
 }
