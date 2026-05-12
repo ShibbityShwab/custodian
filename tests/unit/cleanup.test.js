@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { cleanupMessages, handleCleanupCommand } from '../../src/commands/cleanup.js';
+import {
+  cleanupMessages,
+  handlerLogic as handleCleanupCommand,
+} from '../../src/commands/cleanup.js';
 import { InteractionResponseType } from '../../src/constants.js';
 
 const mockGet = vi.fn();
@@ -136,7 +139,7 @@ describe('cleanup', () => {
         token: 'interaction-token',
       };
       const result = await handleCleanupCommand(interaction);
-      expect(typeof result._backgroundTask).toBe('function');
+      expect(typeof result.backgroundTask).toBe('function');
       expect(result.response.type).toBe(
         InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
       );
@@ -156,7 +159,7 @@ describe('cleanup', () => {
 
       mockGet.mockResolvedValueOnce([makeMessage('1', 60)]).mockResolvedValueOnce([]);
 
-      await result._backgroundTask();
+      await result.backgroundTask();
       expect(mockPatch).toHaveBeenCalledTimes(1);
       expect(mockPatch).toHaveBeenCalledWith(
         expect.any(String),
@@ -180,7 +183,7 @@ describe('cleanup', () => {
 
       mockGet.mockRejectedValueOnce(new Error('boom'));
 
-      await result._backgroundTask();
+      await result.backgroundTask();
       expect(mockPatch).toHaveBeenCalledTimes(1);
       expect(mockPatch).toHaveBeenCalledWith(
         expect.any(String),

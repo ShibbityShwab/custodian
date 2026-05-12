@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleReminderCommand } from '../../src/commands/reminder.js';
-import { handleListRemindersCommand } from '../../src/commands/list-reminders.js';
-import { handleDeleteReminderCommand } from '../../src/commands/delete-reminder.js';
-import { handleHelpCommand } from '../../src/commands/help.js';
+import { handlerLogic as handleReminderCommand } from '../../src/commands/reminder.js';
+import { handlerLogic as handleListRemindersCommand } from '../../src/commands/list-reminders.js';
+import { handlerLogic as handleDeleteReminderCommand } from '../../src/commands/delete-reminder.js';
+import { handlerLogic as handleHelpCommand } from '../../src/commands/help.js';
 import { InteractionResponseType, MessageFlags } from '../../src/constants.js';
 
 vi.mock('../../src/utils/db.js', () => ({
@@ -64,14 +64,14 @@ describe('Command handlers', () => {
     });
 
     it('should return success when saved', async () => {
-      saveReminder.mockResolvedValue(true);
+      saveReminder.mockResolvedValue({ id: 1 });
       const result = await handleReminderCommand(baseInteraction);
-      expect(saveReminder).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user1' }));
+      expect(saveReminder).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'user1' }));
       expect(result.data.content).toContain('Reminder set for <#channel1>');
     });
 
     it('should return error when save fails', async () => {
-      saveReminder.mockResolvedValue(false);
+      saveReminder.mockRejectedValue(new Error('DB error'));
       const result = await handleReminderCommand(baseInteraction);
       expect(result.data.content).toContain('Failed to save');
     });

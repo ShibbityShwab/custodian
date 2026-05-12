@@ -1,6 +1,8 @@
+// src/commands/help.js
 import { InteractionResponseType, MessageFlags } from '../constants.js';
+import { createCommandHandler } from '../utils/commandHandler.js';
 
-export async function handleHelpCommand() {
+export async function handlerLogic() {
   return {
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
@@ -55,3 +57,6 @@ export async function handleHelpCommand() {
     },
   };
 }
+
+export const handleHelpCommand = createCommandHandler(handlerLogic);
+export default handleHelpCommand;

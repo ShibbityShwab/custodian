@@ -1,9 +1,11 @@
+// src/commands/cleanup.js
 import { calculateThreshold, isValidPeriodFormat } from '../utils/parseTime.js';
-import { REST } from '@discordjs/rest';
-import { Routes } from 'discord-api-types/v10';
 import { getOption } from '../utils/helpers.js';
 import { InteractionResponseType, MessageFlags } from '../constants.js';
 import { logger } from '../utils/logger.js';
+import { createCommandHandler } from '../utils/commandHandler.js';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v10';
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 100;
@@ -72,7 +74,8 @@ export async function cleanupMessages(rest, channelId, periodInput, preview = fa
   return totalDeleted;
 }
 
-export async function handleCleanupCommand(interaction) {
+// Main handler logic for the cleanup command
+export async function handlerLogic(interaction) {
   const options = interaction.data.options;
   const channelId = getOption(options, 'channel');
   const periodInput = getOption(options, 'age');
@@ -89,7 +92,13 @@ export async function handleCleanupCommand(interaction) {
   }
 
   return {
-    _backgroundTask: async () => {
+    response: {
+      type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: MessageFlags.EPHEMERAL,
+      },
+    },
+    backgroundTask: async () => {
       const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
       try {
         const deletedCount = await cleanupMessages(rest, channelId, periodInput, preview);
@@ -113,11 +122,8 @@ export async function handleCleanupCommand(interaction) {
         );
       }
     },
-    response: {
-      type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: MessageFlags.EPHEMERAL,
-      },
-    },
   };
 }
+
+export const handleCleanupCommand = createCommandHandler(handlerLogic);
+export default handleCleanupCommand;

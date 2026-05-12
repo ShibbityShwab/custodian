@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getPool, closePool } from './utils/db.js';
+import { getPool } from './utils/db.js';
 import { logger } from './utils/logger.js';
 
 const MIGRATIONS_DIR = new URL('../migrations/', import.meta.url);
@@ -20,7 +20,7 @@ async function getAppliedMigrations(client) {
   return new Set(rows.map((r) => r.filename));
 }
 
-async function runMigration() {
+export async function runMigrations() {
   let client;
   try {
     const pool = getPool();
@@ -57,11 +57,8 @@ async function runMigration() {
     logger.info('Migrations complete');
   } catch (error) {
     logger.error(error, 'Migration failed');
-    process.exit(1);
+    throw error;
   } finally {
     if (client) client.release();
-    await closePool();
   }
 }
-
-runMigration();

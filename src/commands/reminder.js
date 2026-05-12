@@ -1,11 +1,13 @@
+// src/commands/reminder.js
 import { parseTime, isValidTimeFormat } from '../utils/parseTime.js';
-import { saveReminder } from '../utils/db.js';
 import { getOption, getInteractionUser } from '../utils/helpers.js';
 import { InteractionResponseType, MessageFlags } from '../constants.js';
 import { logger } from '../utils/logger.js';
+import { reminderService } from '../services/index.js';
+import { createCommandHandler } from '../utils/commandHandler.js';
 
-export async function handleReminderCommand(interaction) {
-  const options = interaction.data.options;
+export async function handlerLogic(interaction) {
+  const options = interaction.data?.options || [];
   const channelId = getOption(options, 'channel');
   const timeInput = getOption(options, 'time');
   const message = getOption(options, 'message');
@@ -33,18 +35,23 @@ export async function handleReminderCommand(interaction) {
   const milliseconds = parseTime(timeInput);
   const reminderTime = Date.now() + milliseconds;
 
-  const reminder = {
-    channelId,
-    guildId: interaction.guild_id,
-    userId: getInteractionUser(interaction),
-    message,
-    time: reminderTime,
-  };
+  try {
+    await reminderService.create({
+      channelId,
+      userId: getInteractionUser(interaction),
+      message,
+      expiresAt: reminderTime,
+    });
 
-  const success = await saveReminder(reminder);
-
-  if (!success) {
-    logger.error({ reminder }, 'Failed to save reminder');
+    return {
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: `Reminder set for <#${channelId}> in ${timeInput}.`,
+        flags: MessageFlags.EPHEMERAL,
+      },
+    };
+  } catch (error) {
+    logger.error(error, 'Failed to save reminder');
     return {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
@@ -53,12 +60,7 @@ export async function handleReminderCommand(interaction) {
       },
     };
   }
-
-  return {
-    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: {
-      content: `Reminder set for <#${channelId}> in ${timeInput}.`,
-      flags: MessageFlags.EPHEMERAL,
-    },
-  };
 }
+
+export const handleReminderCommand = createCommandHandler(handlerLogic);
+export default handleReminderCommand;
