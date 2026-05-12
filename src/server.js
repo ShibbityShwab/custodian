@@ -7,12 +7,16 @@ import { logger } from './utils/logger.js';
 import { runMigrations } from './migrate.js';
 import { deployCommands } from '../deploy-commands.js';
 import { config } from './config.js';
+import { startDiscordClient, stopDiscordClient } from './discordClient.js';
 
 let serverInstance = null;
 let cronTask = null;
 
 function shutdown(signal) {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
+  stopDiscordClient().catch((err) => {
+    logger.error(err, 'Error stopping Discord client');
+  });
   if (cronTask) cronTask.stop();
   if (serverInstance) {
     serverInstance.close(async () => {
@@ -70,6 +74,13 @@ async function start() {
   serverInstance = serve({ fetch: app.fetch, port: PORT }, (info) => {
     logger.info(`Custodian listening on port ${info.port}`);
   });
+
+  // 6. Start Discord client for online presence
+  try {
+    await startDiscordClient();
+  } catch (error) {
+    logger.error(error, 'Failed to start Discord client; continuing anyway...');
+  }
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
