@@ -17,3 +17,11 @@ export async function deployCommands() {
     throw error;
   }
 }
+
+// Call the function when the script is run directly
+if (process.argv[1].endsWith('deploy-commands.js')) {
+  deployCommands().catch((err) => {
+    logger.error(err, 'Failed to deploy commands');
+    process.exit(1);
+  });
+}
