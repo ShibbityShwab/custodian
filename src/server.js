@@ -8,58 +8,71 @@ import { runMigrations } from './migrate.js';
 import { deployCommands } from '../deploy-commands.js';
 import { config } from './config.js';
 
-const shutdown = (signal, task, server) => {
+let serverInstance = null;
+let cronTask = null;
+
+function shutdown(signal) {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
-  task.stop();
-  server.close(async () => {
-    await closePool();
-    logger.info('Closed DB pool. Exiting.');
+  if (cronTask) cronTask.stop();
+  if (serverInstance) {
+    serverInstance.close(async () => {
+      await closePool();
+      logger.info('Closed DB pool. Exiting.');
+      process.exit(0);
+    });
+  } else {
     process.exit(0);
-  });
-};
+  }
+}
 
 async function start() {
   // Config validation happens automatically when importing config.js
-  // If any required variables are missing or invalid, it will throw there
+  // If any required variables are missing or invalid, it will throw there.
 
   try {
     // 1. Run Migrations
     await runMigrations();
 
-    // 2. Deploy Commands (Idempotent)
-    await deployCommands();
-
-    // 3. Start DB pool
+    // 2. Start DB pool (needed for health checks)
     getPool();
-
-    const PORT = config.PORT || 3000;
-
-    let runningScheduled = false;
-    const task = cron.schedule('* * * * *', async () => {
-      if (runningScheduled) {
-        logger.warn('Scheduled tasks still running; skipping this tick');
-        return;
-      }
-      runningScheduled = true;
-      try {
-        await runScheduledTasks();
-      } catch (err) {
-        logger.error(err, 'Scheduled task error');
-      } finally {
-        runningScheduled = false;
-      }
-    });
-
-    const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
-      logger.info(`Custodian listening on port ${info.port}`);
-    });
-
-    process.on('SIGTERM', () => shutdown('SIGTERM', task, server));
-    process.on('SIGINT', () => shutdown('SIGINT', task, server));
   } catch (error) {
-    logger.error(error, 'Failed to start application');
+    logger.error(error, 'Failed to initialize application');
     process.exit(1);
   }
+
+  // 3. Deploy Commands (best-effort — don't crash if Discord API is unavailable)
+  try {
+    await deployCommands();
+  } catch (error) {
+    logger.error(error, 'Failed to deploy Discord commands; continuing anyway...');
+  }
+
+  const PORT = config.PORT || 3000;
+
+  // 4. Start cron job for scheduled tasks
+  let runningScheduled = false;
+  cronTask = cron.schedule('* * * * *', async () => {
+    if (runningScheduled) {
+      logger.warn('Scheduled tasks still running; skipping this tick');
+      return;
+    }
+    runningScheduled = true;
+    try {
+      await runScheduledTasks();
+    } catch (err) {
+      logger.error(err, 'Scheduled task error');
+    } finally {
+      runningScheduled = false;
+    }
+  });
+
+  // 5. Start HTTP server
+  serverInstance = serve({ fetch: app.fetch, port: PORT }, (info) => {
+    logger.info(`Custodian listening on port ${info.port}`);
+  });
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 start();
