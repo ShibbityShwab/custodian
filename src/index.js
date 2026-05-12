@@ -67,37 +67,11 @@ app.post('/interactions', async (c) => {
     }
 
     try {
-      // Pass the Hono context to the handler
-      const result = await handler(c);
-
-      // Handle background task pattern: { response, backgroundTask: () => Promise }
-      if (
-        result &&
-        typeof result === 'object' &&
-        result.backgroundTask &&
-        typeof result.backgroundTask === 'function'
-      ) {
-        // Execute background task but don't await it (fire-and-forget with error logging)
-        result.backgroundTask().catch((err) => {
-          logger.error(err, 'Background task error');
-        });
-        return c.json(result.response);
-      }
-
-      // Handle direct response object
-      if (result && typeof result === 'object' && result.type !== undefined) {
-        return c.json(result);
-      }
-
-      // Fallback: if handler returned something unexpected, wrap it
-      logger.warn('Command handler returned unexpected format', { result });
-      return c.json({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'Command executed but returned unexpected format.',
-          flags: MessageFlags.EPHEMERAL,
-        },
-      });
+      // The handler (wrapped by createCommandHandler) already:
+      // 1. Extracts interaction from context
+      // 2. Calls the plain handler function
+      // 3. Calls c.json() and returns the Hono Response
+      return await handler(c);
     } catch (error) {
       logger.error(error, 'Command Error');
       return c.json({
