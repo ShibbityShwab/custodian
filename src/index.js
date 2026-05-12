@@ -1,18 +1,15 @@
+// src/index.js
 import { Hono } from 'hono';
 import { verifyKey } from 'discord-interactions';
-import { commands } from './commands/registry.js';
-import {
-  getPendingReminders,
-  getRecurringCleanups,
-  deleteReminder,
-  updateRecurringCleanupLastRun,
-  getPool,
-} from './utils/db.js';
+import { InteractionType, InteractionResponseType, MessageFlags } from './constants.js';
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
-import { cleanupMessages } from './commands/cleanup.js';
-import { InteractionType, InteractionResponseType, MessageFlags } from './constants.js';
+import { commands } from './commands/registry.js';
 import { logger } from './utils/logger.js';
+import { config } from './config.js';
+import { getPool } from './utils/db.js';
+import { reminderService } from './services/index.js';
+import { cleanupService } from './services/index.js';
 
 const app = new Hono();
 
@@ -37,7 +34,7 @@ app.use('/interactions', async (c, next) => {
   }
 
   const rawBody = await c.req.text();
-  const isValidRequest = await verifyKey(rawBody, signature, timestamp, process.env.PUBLIC_KEY);
+  const isValidRequest = await verifyKey(rawBody, signature, timestamp, config.PUBLIC_KEY);
 
   if (!isValidRequest) {
     return c.text('Invalid signature', 401);
@@ -59,25 +56,48 @@ app.post('/interactions', async (c) => {
     const { name } = interaction.data;
     const handler = commands.get(name);
 
+    if (!handler) {
+      return c.json({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: 'Unknown command.',
+          flags: MessageFlags.EPHEMERAL,
+        },
+      });
+    }
+
     try {
-      if (!handler) {
-        return c.json({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: 'Unknown command.',
-            flags: MessageFlags.EPHEMERAL,
-          },
+      // Pass the Hono context to the handler
+      const result = await handler(c);
+
+      // Handle background task pattern: { response, backgroundTask: () => Promise }
+      if (
+        result &&
+        typeof result === 'object' &&
+        result.backgroundTask &&
+        typeof result.backgroundTask === 'function'
+      ) {
+        // Execute background task but don't await it (fire-and-forget with error logging)
+        result.backgroundTask().catch((err) => {
+          logger.error(err, 'Background task error');
         });
-      }
-
-      const result = await handler(interaction);
-
-      if (result && result._backgroundTask) {
-        result._backgroundTask().catch((err) => logger.error(err, 'Background task error'));
         return c.json(result.response);
       }
 
-      return c.json(result);
+      // Handle direct response object
+      if (result && typeof result === 'object' && result.type !== undefined) {
+        return c.json(result);
+      }
+
+      // Fallback: if handler returned something unexpected, wrap it
+      logger.warn('Command handler returned unexpected format', { result });
+      return c.json({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: 'Command executed but returned unexpected format.',
+          flags: MessageFlags.EPHEMERAL,
+        },
+      });
     } catch (error) {
       logger.error(error, 'Command Error');
       return c.json({
@@ -94,10 +114,11 @@ app.post('/interactions', async (c) => {
 });
 
 export async function runScheduledTasks() {
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
+  const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
 
   try {
-    const pendingReminders = await getPendingReminders();
+    // Handle pending reminders
+    const pendingReminders = await reminderService.getPending();
     for (const reminder of pendingReminders) {
       try {
         await rest.post(Routes.channelMessages(reminder.channel_id), {
@@ -105,29 +126,14 @@ export async function runScheduledTasks() {
             content: `\u23f0 Reminder: ${reminder.message}`,
           },
         });
-        await deleteReminder(reminder.id);
+        await reminderService.delete(reminder.id);
       } catch (error) {
         logger.error(error, `Failed to send reminder to ${reminder.channel_id}`);
       }
     }
 
-    const cleanups = await getRecurringCleanups();
-    const now = Date.now();
-
-    for (const cleanup of cleanups) {
-      const lastRun = cleanup.last_run || 0;
-      const intervalMs = cleanup.interval_minutes * 60 * 1000;
-
-      if (now - lastRun >= intervalMs) {
-        try {
-          logger.info(`Running scheduled cleanup for channel ${cleanup.channel_id}`);
-          await cleanupMessages(rest, cleanup.channel_id, cleanup.period_input, false);
-          await updateRecurringCleanupLastRun(cleanup.channel_id, now);
-        } catch (error) {
-          logger.error(error, `Scheduled cleanup failed for channel ${cleanup.channel_id}`);
-        }
-      }
-    }
+    // Handle scheduled cleanups
+    await cleanupService.runScheduledCleanups(rest);
   } catch (error) {
     logger.error(error, 'Scheduled tasks error');
   }

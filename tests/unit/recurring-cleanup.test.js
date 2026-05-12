@@ -1,20 +1,22 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  setRecurringCleanup,
-  viewCleanupSchedule,
-  cancelRecurringCleanup,
-  editRecurringCleanup,
+  setRecurringCleanupLogic as setRecurringCleanup,
+  viewCleanupScheduleLogic as viewCleanupSchedule,
+  cancelRecurringCleanupLogic as cancelRecurringCleanup,
+  editRecurringCleanupLogic as editRecurringCleanup,
 } from '../../src/commands/recurring-cleanup.js';
 
 vi.mock('../../src/utils/db.js', () => ({
   saveRecurringCleanup: vi.fn(),
   getRecurringCleanups: vi.fn(),
+  getRecurringCleanup: vi.fn(),
   deleteRecurringCleanup: vi.fn(),
 }));
 
 import {
   saveRecurringCleanup,
   getRecurringCleanups,
+  getRecurringCleanup,
   deleteRecurringCleanup,
 } from '../../src/utils/db.js';
 
@@ -68,7 +70,7 @@ describe('recurring-cleanup command handlers', () => {
       };
       const result = await setRecurringCleanup(interaction);
       expect(result.data.content).toContain('Recurring cleanup set');
-      expect(saveRecurringCleanup).toHaveBeenCalledWith('ch1', 'g1', 5, '1h');
+      expect(saveRecurringCleanup).toHaveBeenCalledWith('ch1', 'g1', 5, '1h', false);
     });
 
     it('should return failure when save fails', async () => {
@@ -156,7 +158,7 @@ describe('recurring-cleanup command handlers', () => {
     });
 
     it('should return not found when channel has no cleanup', async () => {
-      getRecurringCleanups.mockResolvedValue([]);
+      getRecurringCleanup.mockResolvedValue(null);
       const interaction = {
         guild_id: 'g1',
         data: {
@@ -172,9 +174,12 @@ describe('recurring-cleanup command handlers', () => {
 
     it('should update interval when found', async () => {
       saveRecurringCleanup.mockResolvedValue(true);
-      getRecurringCleanups.mockResolvedValue([
-        { channel_id: 'ch1', interval_minutes: 5, period_input: '1h', last_run: Date.now() },
-      ]);
+      getRecurringCleanup.mockResolvedValue({
+        channel_id: 'ch1',
+        interval_minutes: 5,
+        period_input: '1h',
+        last_run: Date.now(),
+      });
       const interaction = {
         guild_id: 'g1',
         data: {
@@ -191,9 +196,12 @@ describe('recurring-cleanup command handlers', () => {
 
     it('should return failure when save fails', async () => {
       saveRecurringCleanup.mockResolvedValue(false);
-      getRecurringCleanups.mockResolvedValue([
-        { channel_id: 'ch1', interval_minutes: 5, period_input: '1h', last_run: Date.now() },
-      ]);
+      getRecurringCleanup.mockResolvedValue({
+        channel_id: 'ch1',
+        interval_minutes: 5,
+        period_input: '1h',
+        last_run: Date.now(),
+      });
       const interaction = {
         guild_id: 'g1',
         data: {

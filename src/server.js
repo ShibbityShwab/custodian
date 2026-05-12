@@ -1,49 +1,14 @@
+// src/server.js
 import { serve } from '@hono/node-server';
 import cron from 'node-cron';
 import app, { runScheduledTasks } from './index.js';
 import { getPool, closePool } from './utils/db.js';
 import { logger } from './utils/logger.js';
+import { runMigrations } from './migrate.js';
+import { deployCommands } from '../deploy-commands.js';
+import { config } from './config.js';
 
-const REQUIRED_ENV_VARS = ['DATABASE_URL', 'DISCORD_BOT_TOKEN', 'CLIENT_ID', 'PUBLIC_KEY'];
-
-function validateEnv() {
-  const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
-  if (missing.length > 0) {
-    const errorMsg = `Missing required environment variables: ${missing.join(', ')}`;
-    logger.error(errorMsg);
-    console.error(errorMsg);
-    process.exit(1);
-  }
-}
-
-validateEnv();
-
-// Eagerly initialize the pool so any connection errors surface early
-getPool();
-
-const PORT = process.env.PORT || 3000;
-
-let running = false;
-const task = cron.schedule('* * * * *', async () => {
-  if (running) {
-    logger.warn('Scheduled tasks still running; skipping this tick to prevent overlap');
-    return;
-  }
-  running = true;
-  try {
-    await runScheduledTasks();
-  } catch (err) {
-    logger.error(err, 'Scheduled task error');
-  } finally {
-    running = false;
-  }
-});
-
-const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
-  logger.info(`Custodian listening on port ${info.port}`);
-});
-
-function shutdown(signal) {
+const shutdown = (signal, task, server) => {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
   task.stop();
   server.close(async () => {
@@ -51,7 +16,50 @@ function shutdown(signal) {
     logger.info('Closed DB pool. Exiting.');
     process.exit(0);
   });
+};
+
+async function start() {
+  // Config validation happens automatically when importing config.js
+  // If any required variables are missing or invalid, it will throw there
+
+  try {
+    // 1. Run Migrations
+    await runMigrations();
+
+    // 2. Deploy Commands (Idempotent)
+    await deployCommands();
+
+    // 3. Start DB pool
+    getPool();
+
+    const PORT = config.PORT || 3000;
+
+    let runningScheduled = false;
+    const task = cron.schedule('* * * * *', async () => {
+      if (runningScheduled) {
+        logger.warn('Scheduled tasks still running; skipping this tick');
+        return;
+      }
+      runningScheduled = true;
+      try {
+        await runScheduledTasks();
+      } catch (err) {
+        logger.error(err, 'Scheduled task error');
+      } finally {
+        runningScheduled = false;
+      }
+    });
+
+    const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
+      logger.info(`Custodian listening on port ${info.port}`);
+    });
+
+    process.on('SIGTERM', () => shutdown('SIGTERM', task, server));
+    process.on('SIGINT', () => shutdown('SIGINT', task, server));
+  } catch (error) {
+    logger.error(error, 'Failed to start application');
+    process.exit(1);
+  }
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+start();

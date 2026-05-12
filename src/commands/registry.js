@@ -1,13 +1,14 @@
+// src/commands/registry.js
+import handleReminderCommand from './reminder.js';
+import handleCleanupCommand from './cleanup.js';
+import handleListRemindersCommand from './list-reminders.js';
+import handleDeleteReminderCommand from './delete-reminder.js';
 import {
   setRecurringCleanup,
   viewCleanupSchedule,
   cancelRecurringCleanup,
   editRecurringCleanup,
 } from './recurring-cleanup.js';
-import { handleCleanupCommand } from './cleanup.js';
-import { handleReminderCommand } from './reminder.js';
-import { handleListRemindersCommand } from './list-reminders.js';
-import { handleDeleteReminderCommand } from './delete-reminder.js';
 import { handleHelpCommand } from './help.js';
 
 /**

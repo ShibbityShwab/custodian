@@ -17,6 +17,17 @@ vi.mock('../../src/utils/db.js', () => ({
   updateRecurringCleanupLastRun: vi.fn(),
 }));
 
+// Mock config to avoid validation errors
+vi.mock('../../src/config.js', () => ({
+  config: {
+    DATABASE_URL: 'test-db-url',
+    DISCORD_BOT_TOKEN: 'test-token',
+    CLIENT_ID: 'test-client-id',
+    PUBLIC_KEY: 'test-public-key',
+    PORT: 3000,
+  },
+}));
+
 describe('HTTP routes', () => {
   describe('GET /health', () => {
     it('should return 200 when DB is healthy', async () => {
