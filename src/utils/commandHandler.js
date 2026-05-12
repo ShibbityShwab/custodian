@@ -4,12 +4,10 @@ import { InteractionResponseType, MessageFlags } from '../constants.js';
 
 /**
  * Wraps a plain handler function (takes an interaction object, returns a response object)
- * into a Hono-compatible handler (takes a Hono context, returns a plain response object).
- *
- * The Hono route handler (in index.js) will call c.json() on the returned object.
+ * into a Hono-compatible handler (takes a Hono context, calls c.json() and returns Hono response).
  *
  * @param {(interaction: object) => Promise<object>} handlerFn - The async function that handles the command logic
- * @returns {(c: HonoContext) => Promise<object>} A Hono handler that extracts the interaction from context, runs the handler, and returns a plain response object
+ * @returns {(c: HonoContext) => Promise<Response>} A Hono handler that extracts the interaction from context, runs the handler, and sends the response
  */
 export function createCommandHandler(handlerFn) {
   return async (c) => {
@@ -31,32 +29,33 @@ export function createCommandHandler(handlerFn) {
         result.backgroundTask().catch((err) => {
           logger.error(err, 'Background task error');
         });
-        return result.response;
+        // Send the immediate response
+        return c.json(result.response);
       }
 
       // Handle direct response object
       if (result && typeof result === 'object' && result.type !== undefined) {
-        return result;
+        return c.json(result);
       }
 
       // Fallback: if handler returned something unexpected, wrap it
       logger.warn('Command handler returned unexpected format', { result });
-      return {
+      return c.json({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
           content: 'Command executed but returned unexpected format.',
           flags: MessageFlags.EPHEMERAL,
         },
-      };
+      });
     } catch (error) {
       logger.error(error, 'Command handler error');
-      return {
+      return c.json({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
           content: 'An error occurred while processing the command. Please try again later.',
           flags: MessageFlags.EPHEMERAL,
         },
-      };
+      });
     }
   };
 }
