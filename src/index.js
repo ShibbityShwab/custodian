@@ -47,6 +47,7 @@ app.use('/interactions', async (c, next) => {
 app.post('/interactions', async (c) => {
   const rawBody = c.get('rawBody');
   logger.info(`Received interaction: ${rawBody}`);
+  console.log('DEBUG: Received request at /interactions');
 
   if (!rawBody) {
     logger.warn('Interactions request received without rawBody');
