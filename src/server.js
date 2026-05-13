@@ -1,4 +1,5 @@
 // src/server.js
+import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import cron from 'node-cron';
 import app, { runScheduledTasks } from './index.js';

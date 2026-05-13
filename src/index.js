@@ -46,6 +46,12 @@ app.use('/interactions', async (c, next) => {
 
 app.post('/interactions', async (c) => {
   const rawBody = c.get('rawBody');
+
+  if (!rawBody) {
+    logger.warn('Interactions request received without rawBody');
+    return c.text('No body', 400);
+  }
+
   const interaction = JSON.parse(rawBody);
 
   if (interaction.type === InteractionType.PING) {
