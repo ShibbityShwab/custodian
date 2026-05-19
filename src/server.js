@@ -1,14 +1,13 @@
-// src/server.js
 import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import cron from 'node-cron';
-import app, { runScheduledTasks } from './index.js';
-import { getPool, closePool } from './utils/db.js';
+import app, { runRecurringCleanups } from './index.js';
 import { logger } from './utils/logger.js';
-import { runMigrations } from './migrate.js';
-import { deployCommands } from '../deploy-commands.js';
 import { config } from './config.js';
 import { startDiscordClient, stopDiscordClient } from './discordClient.js';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v10';
+import { commands } from './commands/definitions.js';
 
 let serverInstance = null;
 let cronTask = null;
@@ -20,9 +19,8 @@ function shutdown(signal) {
   });
   if (cronTask) cronTask.stop();
   if (serverInstance) {
-    serverInstance.close(async () => {
-      await closePool();
-      logger.info('Closed DB pool. Exiting.');
+    serverInstance.close(() => {
+      logger.info('Server closed. Exiting.');
       process.exit(0);
     });
   } else {
@@ -30,22 +28,18 @@ function shutdown(signal) {
   }
 }
 
-async function start() {
-  // Config validation happens automatically when importing config.js
-  // If any required variables are missing or invalid, it will throw there.
-
+async function deployCommands() {
+  const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
   try {
-    // 1. Run Migrations
-    await runMigrations();
-
-    // 2. Start DB pool (needed for health checks)
-    getPool();
+    logger.info('Registering slash commands...');
+    await rest.put(Routes.applicationCommands(config.CLIENT_ID), { body: commands });
+    logger.info('Slash commands registered.');
   } catch (error) {
-    logger.error(error, 'Failed to initialize application');
-    process.exit(1);
+    logger.error(error, 'Failed to register commands; continuing anyway...');
   }
+}
 
-  // 3. Deploy Commands (best-effort — don't crash if Discord API is unavailable)
+async function start() {
   try {
     await deployCommands();
   } catch (error) {
@@ -54,7 +48,6 @@ async function start() {
 
   const PORT = config.PORT || 3000;
 
-  // 4. Start cron job for scheduled tasks
   let runningScheduled = false;
   cronTask = cron.schedule('* * * * *', async () => {
     if (runningScheduled) {
@@ -63,7 +56,7 @@ async function start() {
     }
     runningScheduled = true;
     try {
-      await runScheduledTasks();
+      await runRecurringCleanups();
     } catch (err) {
       logger.error(err, 'Scheduled task error');
     } finally {
@@ -71,12 +64,10 @@ async function start() {
     }
   });
 
-  // 5. Start HTTP server
   serverInstance = serve({ fetch: app.fetch, port: PORT }, (info) => {
     logger.info(`Custodian listening on port ${info.port}`);
   });
 
-  // 6. Start Discord client for online presence
   try {
     await startDiscordClient();
   } catch (error) {

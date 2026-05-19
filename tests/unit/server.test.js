@@ -7,46 +7,23 @@ vi.mock('discord-interactions', () => ({
   verifyKey: vi.fn(),
 }));
 
-vi.mock('../../src/utils/db.js', () => ({
-  getPool: vi.fn(() => ({
-    query: vi.fn().mockResolvedValue({}),
-  })),
-  getPendingReminders: vi.fn().mockResolvedValue([]),
-  getRecurringCleanups: vi.fn().mockResolvedValue([]),
-  deleteReminder: vi.fn(),
-  updateRecurringCleanupLastRun: vi.fn(),
-}));
-
-// Mock config to avoid validation errors
 vi.mock('../../src/config.js', () => ({
   config: {
-    DATABASE_URL: 'test-db-url',
     DISCORD_BOT_TOKEN: 'test-token',
     CLIENT_ID: 'test-client-id',
     PUBLIC_KEY: 'test-public-key',
     PORT: 3000,
+    NODE_ENV: 'test',
   },
 }));
 
 describe('HTTP routes', () => {
   describe('GET /health', () => {
-    it('should return 200 when DB is healthy', async () => {
+    it('should return 200 ok', async () => {
       const res = await app.request('/health');
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.status).toBe('ok');
-      expect(body.db).toBe('ok');
-    });
-
-    it('should return 503 when DB is unhealthy', async () => {
-      const { getPool } = await import('../../src/utils/db.js');
-      getPool.mockReturnValueOnce({
-        query: vi.fn().mockRejectedValue(new Error('connection refused')),
-      });
-      const res = await app.request('/health');
-      expect(res.status).toBe(503);
-      const body = await res.json();
-      expect(body.db).toBe('error');
     });
   });
 
