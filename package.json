@@ -1,10 +1,10 @@
 {
   "name": "custodian",
   "version": "1.0.0",
-  "description": "A Discord bot for message cleanup and management — runs on Railway with PostgreSQL",
+  "description": "A lightweight Discord bot for cleaning up channel messages",
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "node --watch src/server.js",
@@ -21,8 +21,7 @@
     "discord",
     "bot",
     "cleanup",
-    "moderation",
-    "railway"
+    "moderation"
   ],
   "author": "ShibbityShwab",
   "license": "ISC",
@@ -34,9 +33,7 @@
     "discord.js": "^14.26.4",
     "hono": "^4.12.15",
     "node-cron": "^3.0.3",
-    "pg": "^8.13.0",
-    "pino": "^9.0.0",
-    "zod": "^4.4.3"
+    "pino": "^9.0.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.0",

@@ -13,7 +13,7 @@ export async function startDiscordClient() {
     // Don't sync all members (we don't need them)
     presence: {
       status: 'online',
-      activities: [{ name: '/help', type: 2 }], // "Playing /help"
+      activities: [{ name: '/clean', type: 2 }],
     },
   });
 

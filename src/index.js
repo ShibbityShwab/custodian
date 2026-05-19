@@ -1,28 +1,49 @@
-// src/index.js
 import { Hono } from 'hono';
 import { verifyKey } from 'discord-interactions';
 import { InteractionType, InteractionResponseType, MessageFlags } from './constants.js';
 import { REST } from '@discordjs/rest';
-import { Routes } from 'discord-api-types/v10';
 import { commands } from './commands/registry.js';
+import { cleanupMessages } from './commands/clean.js';
 import { logger } from './utils/logger.js';
 import { config } from './config.js';
-import { getPool } from './utils/db.js';
-import { reminderService } from './services/index.js';
-import { cleanupService } from './services/index.js';
+
+const recurringCleanups = new Map();
+
+export function registerRecurringCleanup(channelId, guildId, intervalMinutes, olderThan) {
+  const key = `${guildId}:${channelId}`;
+  recurringCleanups.set(key, {
+    channelId,
+    guildId,
+    intervalMinutes,
+    olderThan,
+    lastRun: Date.now() - intervalMinutes * 60 * 1000,
+  });
+  logger.info(`Registered recurring cleanup for channel ${channelId} every ${intervalMinutes}min`);
+}
+
+export async function runRecurringCleanups() {
+  const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
+  const now = Date.now();
+
+  for (const [, cleanup] of recurringCleanups) {
+    const intervalMs = cleanup.intervalMinutes * 60 * 1000;
+    if (now - cleanup.lastRun < intervalMs) continue;
+
+    try {
+      logger.info(`Running recurring cleanup for channel ${cleanup.channelId}`);
+      const deleted = await cleanupMessages(rest, cleanup.channelId, cleanup.olderThan);
+      cleanup.lastRun = now;
+      logger.info(`Recurring cleanup for ${cleanup.channelId} deleted ${deleted} messages`);
+    } catch (error) {
+      logger.error(error, `Recurring cleanup failed for channel ${cleanup.channelId}`);
+    }
+  }
+}
 
 const app = new Hono();
 
-app.get('/health', async (c) => {
-  let dbStatus = 'ok';
-  try {
-    await getPool().query('SELECT 1');
-  } catch (error) {
-    dbStatus = 'error';
-    logger.error(error, 'Health check DB query failed');
-  }
-  const status = dbStatus === 'ok' ? 200 : 503;
-  return c.json({ status: 'ok', db: dbStatus }, status);
+app.get('/health', (c) => {
+  return c.json({ status: 'ok' });
 });
 
 app.use('/interactions', async (c, next) => {
@@ -46,8 +67,6 @@ app.use('/interactions', async (c, next) => {
 
 app.post('/interactions', async (c) => {
   const rawBody = c.get('rawBody');
-  logger.info(`Received interaction: ${rawBody}`);
-  console.log('DEBUG: Received request at /interactions');
 
   if (!rawBody) {
     logger.warn('Interactions request received without rawBody');
@@ -75,17 +94,13 @@ app.post('/interactions', async (c) => {
     }
 
     try {
-      // The handler (wrapped by createCommandHandler) already:
-      // 1. Extracts interaction from context
-      // 2. Calls the plain handler function
-      // 3. Calls c.json() and returns the Hono Response
       return await handler(c);
     } catch (error) {
       logger.error(error, 'Command Error');
       return c.json({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'An error occurred while processing the command. Please try again later.',
+          content: 'An error occurred while processing the command.',
           flags: MessageFlags.EPHEMERAL,
         },
       });
@@ -94,31 +109,5 @@ app.post('/interactions', async (c) => {
 
   return c.text('Unhandled interaction type', 400);
 });
-
-export async function runScheduledTasks() {
-  const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
-
-  try {
-    // Handle pending reminders
-    const pendingReminders = await reminderService.getPending();
-    for (const reminder of pendingReminders) {
-      try {
-        await rest.post(Routes.channelMessages(reminder.channel_id), {
-          body: {
-            content: `\u23f0 Reminder: ${reminder.message}`,
-          },
-        });
-        await reminderService.delete(reminder.id);
-      } catch (error) {
-        logger.error(error, `Failed to send reminder to ${reminder.channel_id}`);
-      }
-    }
-
-    // Handle scheduled cleanups
-    await cleanupService.runScheduledCleanups(rest);
-  } catch (error) {
-    logger.error(error, 'Scheduled tasks error');
-  }
-}
 
 export default app;
