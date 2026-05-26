@@ -25,8 +25,10 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/zipball/$GITHUB_SHA" \
             -o repo.zip
           unzip -q repo.zip
-          mv ShibbityShwab-custodian-*/* .
-          rm -rf ShibbityShwab-custodian-* repo.zip
+          REPO_DIR=$(echo ShibbityShwab-custodian-*)
+          shopt -s dotglob
+          cp -r "$REPO_DIR"/* .
+          rm -rf "$REPO_DIR" repo.zip
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
