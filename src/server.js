@@ -31,6 +31,24 @@ function shutdown(signal) {
 async function deployCommands() {
   try {
     logger.info('Registering slash commands...');
+
+    const currentNames = new Set(commands.map((c) => c.name));
+
+    // Fetch currently registered commands and delete any stale ones
+    const existingCommands = await rest.get(Routes.applicationCommands(config.CLIENT_ID));
+    const staleCommands = existingCommands.filter((cmd) => !currentNames.has(cmd.name));
+
+    if (staleCommands.length > 0) {
+      logger.info(
+        `Cleaning up ${staleCommands.length} stale command(s): ${staleCommands.map((c) => c.name).join(', ')}`
+      );
+      await Promise.all(
+        staleCommands.map((cmd) =>
+          rest.delete(`${Routes.applicationCommands(config.CLIENT_ID)}/${cmd.id}`)
+        )
+      );
+    }
+
     await rest.put(Routes.applicationCommands(config.CLIENT_ID), { body: commands });
     logger.info('Slash commands registered.');
   } catch (error) {
