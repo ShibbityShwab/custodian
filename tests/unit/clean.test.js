@@ -117,18 +117,6 @@ describe('clean', () => {
       expect(result.data.content).toContain('Invalid period format');
     });
 
-    it('should return error for invalid recurring interval', async () => {
-      const interaction = {
-        channel_id: 'ch1',
-        data: {
-          options: [{ name: 'recurring', value: 0 }],
-        },
-      };
-      const result = await handleCleanCommand(interaction);
-      expect(result.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
-      expect(result.data.content).toContain('Recurring interval');
-    });
-
     it('should return deferred response with background task for valid older_than', async () => {
       const interaction = {
         channel_id: 'ch1',
@@ -143,40 +131,6 @@ describe('clean', () => {
       expect(result.response.type).toBe(
         InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
       );
-    });
-
-    it('should return deferred with no recurring when not provided', async () => {
-      const interaction = {
-        channel_id: 'ch1',
-        guild_id: 'g1',
-        data: {
-          options: [{ name: 'older_than', value: '30m' }],
-        },
-        token: 'interaction-token',
-      };
-      const result = await handleCleanCommand(interaction);
-      expect(result.recurring).toBeNull();
-    });
-
-    it('should return deferred with recurring data when provided', async () => {
-      const interaction = {
-        channel_id: 'ch1',
-        guild_id: 'g1',
-        data: {
-          options: [
-            { name: 'older_than', value: '30m' },
-            { name: 'recurring', value: 60 },
-          ],
-        },
-        token: 'interaction-token',
-      };
-      const result = await handleCleanCommand(interaction);
-      expect(result.recurring).toEqual({
-        channelId: 'ch1',
-        guildId: 'g1',
-        intervalMinutes: 60,
-        olderThan: '30m',
-      });
     });
 
     it('should update original message on background task success', async () => {

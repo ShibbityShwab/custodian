@@ -21,6 +21,32 @@ export function registerRecurringCleanup(channelId, guildId, intervalMinutes, ol
   logger.info(`Registered recurring cleanup for channel ${channelId} every ${intervalMinutes}min`);
 }
 
+export function unregisterRecurringCleanup(channelId, guildId) {
+  const key = `${guildId}:${channelId}`;
+  const existed = recurringCleanups.has(key);
+  recurringCleanups.delete(key);
+  if (existed) {
+    logger.info(`Unregistered recurring cleanup for channel ${channelId}`);
+  }
+  return existed;
+}
+
+export function getGuildSchedules(guildId) {
+  const results = [];
+  for (const [key, cleanup] of recurringCleanups) {
+    if (key.startsWith(`${guildId}:`)) {
+      results.push({
+        channelId: cleanup.channelId,
+        guildId: cleanup.guildId,
+        intervalMinutes: cleanup.intervalMinutes,
+        olderThan: cleanup.olderThan,
+        lastRun: cleanup.lastRun,
+      });
+    }
+  }
+  return results;
+}
+
 export async function runRecurringCleanups() {
   const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
   const now = Date.now();
