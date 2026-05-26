@@ -2,8 +2,7 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 COPY package*.json ./
-ENV HUSKY=0
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY . .
 
