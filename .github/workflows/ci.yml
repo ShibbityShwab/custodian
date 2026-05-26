@@ -17,16 +17,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout via API zipball
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -sSL -H "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/zipball/$GITHUB_SHA" \
+            -o repo.zip
+          unzip -q repo.zip
+          mv ShibbityShwab-custodian-*/* .
+          rm -rf ShibbityShwab-custodian-* repo.zip
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
