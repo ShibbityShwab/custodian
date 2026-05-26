@@ -73,23 +73,12 @@ export async function handlerLogic(interaction) {
   const options = interaction.data?.options || [];
   const channelId = interaction.channel_id;
   const olderThan = getOption(options, 'older_than');
-  const recurring = getOption(options, 'recurring');
 
   if (olderThan && !isValidPeriodFormat(olderThan)) {
     return {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
         content: 'Invalid period format. Use format like "30s", "15m", "1h", "1d".',
-        flags: MessageFlags.EPHEMERAL,
-      },
-    };
-  }
-
-  if (recurring !== undefined && (recurring < 1 || recurring > 525600)) {
-    return {
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: 'Recurring interval must be between 1 and 525600 minutes (1 year).',
         flags: MessageFlags.EPHEMERAL,
       },
     };
@@ -126,15 +115,6 @@ export async function handlerLogic(interaction) {
         );
       }
     },
-    recurring:
-      recurring !== undefined
-        ? {
-            channelId,
-            guildId: interaction.guild_id,
-            intervalMinutes: recurring,
-            olderThan: olderThan || null,
-          }
-        : null,
   };
 }
 
