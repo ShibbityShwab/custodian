@@ -1,11 +1,10 @@
 import { logger } from './logger.js';
 import { InteractionResponseType, MessageFlags } from '../constants.js';
-import { registerRecurringCleanup } from '../index.js';
+import { registerRecurringCleanup } from '../recurringState.js';
 
 export function createCommandHandler(handlerFn) {
   return async (c) => {
-    const rawBody = c.get('rawBody');
-    const interaction = rawBody ? JSON.parse(rawBody) : {};
+    const interaction = c.get('interaction') || {};
 
     try {
       const result = await handlerFn(interaction);

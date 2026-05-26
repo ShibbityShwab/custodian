@@ -39,26 +39,11 @@ export function parseTime(timeStr) {
  * @returns {number|null} Timestamp threshold or null if invalid input
  */
 export function calculateThreshold(periodInput) {
-  if (!periodInput || typeof periodInput !== 'string') {
+  if (!isValidPeriodFormat(periodInput)) {
     return null;
   }
 
-  const periodRegex = /^(\d+)(s|m|h|d|w)$/;
-  const match = periodInput.match(periodRegex);
-
-  if (!match) {
-    return null;
-  }
-
-  const [, amount, unit] = match;
-  const amountNumber = parseInt(amount, 10);
-  const multiplier = UNITS[unit];
-
-  if (!multiplier) {
-    return null;
-  }
-
-  return Date.now() - amountNumber * multiplier;
+  return Date.now() - parseTime(periodInput);
 }
 
 /**

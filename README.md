@@ -6,7 +6,10 @@ A lightweight Discord bot that cleans up channel messages — no database requir
 
 - **`/clean`** — Delete messages in the current channel
   - `older_than` (optional): Only delete messages older than a period (e.g. `30s`, `15m`, `1h`, `1d`)
-  - `recurring` (optional): Repeat cleanup on an interval in minutes
+- **`/schedule`** — Manage recurring cleanup schedules
+  - `set`: Schedule recurring cleanup with interval in minutes and optional `older_than` filter
+  - `list`: List all active schedules in the current server
+  - `cancel`: Cancel the schedule in the current channel
 - Requires the **Manage Messages** permission
 
 ## Setup

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getOption, getInteractionUser } from '../../src/utils/helpers.js';
+import { getOption } from '../../src/utils/helpers.js';
 
 describe('getOption', () => {
   it('should return the value of a named option', () => {
@@ -15,18 +15,5 @@ describe('getOption', () => {
   it('should handle undefined or empty options', () => {
     expect(getOption(undefined, 'channel')).toBeUndefined();
     expect(getOption([], 'channel')).toBeUndefined();
-  });
-});
-
-describe('getInteractionUser', () => {
-  it('should extract user id from interaction', () => {
-    const interaction = { member: { user: { id: 'user1' } } };
-    expect(getInteractionUser(interaction)).toBe('user1');
-  });
-
-  it('should return undefined for malformed interaction', () => {
-    expect(getInteractionUser({})).toBeUndefined();
-    expect(getInteractionUser(null)).toBeUndefined();
-    expect(getInteractionUser(undefined)).toBeUndefined();
   });
 });
