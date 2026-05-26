@@ -12,4 +12,3 @@ tests
 Dockerfile
 .dockerignore
 railway.json
-lint-staged.config.js

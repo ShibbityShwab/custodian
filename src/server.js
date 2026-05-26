@@ -1,11 +1,11 @@
 import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import cron from 'node-cron';
-import app, { runRecurringCleanups } from './index.js';
+import app, { runRecurringCleanups, getScheduledEntries } from './index.js';
 import { logger } from './utils/logger.js';
 import { config } from './config.js';
 import { startDiscordClient, stopDiscordClient } from './discordClient.js';
-import { REST } from '@discordjs/rest';
+import { rest } from './restClient.js';
 import { Routes } from 'discord-api-types/v10';
 import { commands } from './commands/definitions.js';
 
@@ -29,7 +29,6 @@ function shutdown(signal) {
 }
 
 async function deployCommands() {
-  const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
   try {
     logger.info('Registering slash commands...');
     await rest.put(Routes.applicationCommands(config.CLIENT_ID), { body: commands });
@@ -40,16 +39,13 @@ async function deployCommands() {
 }
 
 async function start() {
-  try {
-    await deployCommands();
-  } catch (error) {
-    logger.error(error, 'Failed to deploy Discord commands; continuing anyway...');
-  }
+  await deployCommands();
 
   const PORT = config.PORT || 3000;
 
   let runningScheduled = false;
   cronTask = cron.schedule('* * * * *', async () => {
+    if (getScheduledEntries().size === 0) return;
     if (runningScheduled) {
       logger.warn('Scheduled tasks still running; skipping this tick');
       return;
@@ -78,4 +74,9 @@ async function start() {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-start();
+const isMainModule = import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`;
+if (isMainModule || process.argv[1]?.endsWith('server.js')) {
+  start();
+}
+
+export { start, deployCommands };

@@ -5,10 +5,12 @@ import { logger } from '../utils/logger.js';
 import { createCommandHandler } from '../utils/commandHandler.js';
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
+import { config } from '../config.js';
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 100;
 const MAX_MESSAGES = 1000;
+const DELETE_DELAY_MS = 200;
 
 export async function cleanupMessages(rest, channelId, olderThan) {
   let totalDeleted = 0;
@@ -26,12 +28,14 @@ export async function cleanupMessages(rest, channelId, olderThan) {
     const messages = await rest.get(Routes.channelMessages(channelId) + `?${query.toString()}`);
     if (messages.length === 0) break;
 
+    const earliestTs = new Date(messages[messages.length - 1].timestamp).getTime();
     const oldMessages = messages.filter((msg) => {
       const msgTimestamp = new Date(msg.timestamp).getTime();
       return msgTimestamp < threshold;
     });
 
     if (oldMessages.length === 0) {
+      if (earliestTs >= threshold) break;
       lastId = messages[messages.length - 1].id;
       continue;
     }
@@ -58,6 +62,7 @@ export async function cleanupMessages(rest, channelId, olderThan) {
       try {
         await rest.delete(Routes.channelMessage(channelId, msg.id));
         totalDeleted += 1;
+        await new Promise((resolve) => setTimeout(resolve, DELETE_DELAY_MS));
       } catch (e) {
         logger.error(e, 'Error deleting old message');
       }
@@ -92,27 +97,21 @@ export async function handlerLogic(interaction) {
       },
     },
     backgroundTask: async () => {
-      const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
+      const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
       try {
         const deletedCount = await cleanupMessages(rest, channelId, olderThan);
         const resultMessage = olderThan
           ? `Cleanup complete. Deleted ${deletedCount} messages older than ${olderThan}.`
           : `Cleanup complete. Deleted ${deletedCount} messages.`;
 
-        await rest.patch(
-          Routes.webhookMessage(process.env.CLIENT_ID, interaction.token, '@original'),
-          {
-            body: { content: resultMessage },
-          }
-        );
+        await rest.patch(Routes.webhookMessage(config.CLIENT_ID, interaction.token, '@original'), {
+          body: { content: resultMessage },
+        });
       } catch (error) {
         logger.error(error, 'Cleanup Error');
-        await rest.patch(
-          Routes.webhookMessage(process.env.CLIENT_ID, interaction.token, '@original'),
-          {
-            body: { content: 'Cleanup failed. Check permissions and try again.' },
-          }
-        );
+        await rest.patch(Routes.webhookMessage(config.CLIENT_ID, interaction.token, '@original'), {
+          body: { content: 'Cleanup failed. Check permissions and try again.' },
+        });
       }
     },
   };

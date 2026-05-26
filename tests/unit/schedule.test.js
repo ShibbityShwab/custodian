@@ -3,9 +3,11 @@ import { describe, it, expect, vi } from 'vitest';
 const mockUnregister = vi.fn();
 const mockGetGuild = vi.fn();
 
-vi.mock('../../src/index.js', () => ({
+vi.mock('../../src/recurringState.js', () => ({
   unregisterRecurringCleanup: (...args) => mockUnregister(...args),
   getGuildSchedules: (...args) => mockGetGuild(...args),
+  registerRecurringCleanup: vi.fn(),
+  getScheduledEntries: vi.fn(() => new Map()),
 }));
 
 vi.mock('../../src/config.js', () => ({
@@ -143,6 +145,18 @@ describe('schedule', () => {
         intervalMinutes: 60,
         olderThan: '30m',
       });
+    });
+
+    it('should return error when guild_id is missing', async () => {
+      const interaction = {
+        channel_id: 'ch1',
+        data: {
+          options: subOptions('set', [{ name: 'every', value: 60 }]),
+        },
+      };
+      const result = await handleScheduleCommand(interaction);
+      expect(result.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
+      expect(result.data.content).toContain('server channel');
     });
 
     it('should update original message on background task success', async () => {

@@ -6,12 +6,23 @@ import { createCommandHandler } from '../utils/commandHandler.js';
 import { cleanupMessages } from './clean.js';
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
-import { unregisterRecurringCleanup, getGuildSchedules } from '../index.js';
+import { unregisterRecurringCleanup, getGuildSchedules } from '../recurringState.js';
+import { config } from '../config.js';
 
 function handleSet(interaction, options) {
   const channelId = interaction.channel_id;
   const every = getOption(options, 'every');
   const olderThan = getOption(options, 'older_than');
+
+  if (!interaction.guild_id) {
+    return {
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'This command can only be used in a server channel.',
+        flags: MessageFlags.EPHEMERAL,
+      },
+    };
+  }
 
   if (olderThan && !isValidPeriodFormat(olderThan)) {
     return {
@@ -41,27 +52,21 @@ function handleSet(interaction, options) {
       },
     },
     backgroundTask: async () => {
-      const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
+      const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
       try {
         const deletedCount = await cleanupMessages(rest, channelId, olderThan);
         const resultMessage = olderThan
           ? `Scheduled cleanup every ${every} minute(s). Deleted ${deletedCount} messages older than ${olderThan}.`
           : `Scheduled cleanup every ${every} minute(s). Deleted ${deletedCount} messages.`;
 
-        await rest.patch(
-          Routes.webhookMessage(process.env.CLIENT_ID, interaction.token, '@original'),
-          {
-            body: { content: resultMessage },
-          }
-        );
+        await rest.patch(Routes.webhookMessage(config.CLIENT_ID, interaction.token, '@original'), {
+          body: { content: resultMessage },
+        });
       } catch (error) {
         logger.error(error, 'Schedule Set Error');
-        await rest.patch(
-          Routes.webhookMessage(process.env.CLIENT_ID, interaction.token, '@original'),
-          {
-            body: { content: 'Cleanup failed. Check permissions and try again.' },
-          }
-        );
+        await rest.patch(Routes.webhookMessage(config.CLIENT_ID, interaction.token, '@original'), {
+          body: { content: 'Cleanup failed. Check permissions and try again.' },
+        });
       }
     },
     recurring: {
